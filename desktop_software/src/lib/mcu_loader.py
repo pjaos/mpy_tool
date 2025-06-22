@@ -18,6 +18,7 @@ import sys
 from   p3lib.helper import get_assets_folder
 
 from pyflakes import reporter as modReporter
+from pyflakes.reporter import Reporter
 from pyflakes.api import checkRecursive
 from lib.general import MCUBase
 from time import sleep, time
@@ -193,10 +194,17 @@ class LoaderBase(MCUBase):
     def CheckPythonCode(rootPath):
         """@brief Check the python code using pyflakes
            @param rootPAth The root path of the python code to check."""
-        reporter = modReporter._makeDefaultReporter()
-        warnings = checkRecursive((rootPath,), reporter)
-        if warnings > 0:
-            raise Exception(f"Fix all errors and warnings with python code in {rootPath}.")
+        # Custom reporter to capture messages
+        class CaptureReporter(Reporter):
+            def __init__(self):
+                self.output = io.StringIO()
+                super().__init__(self.output, self.output)
+
+            def get_messages(self):
+                return self.output.getvalue()
+        reporter = CaptureReporter()
+        checkRecursive((rootPath,), reporter)
+        return reporter.get_messages()
 
     @staticmethod
     def GenByteCode(pythonFile):
@@ -1125,8 +1133,11 @@ class MCULoader(LoaderBase):
     def checkMCUCode(self):
         """@brief Run pyflakes3 on the app1 folder code to check for errors before loading it."""
         self.info("Checking python code in the app1 folder using pyflakes")
-        USBLoader.CheckPythonCode(self._appRootFolder)
-        self.info("pyflakes found no issues with the app1 folder code.")
+        messages = USBLoader.CheckPythonCode(self._appRootFolder)
+        if len(messages) > 0:
+            self.error(messages)
+            raise Exception("Errors were found in the Python MCU code. Fix these and try again.")
+        self.info("Python MCU code passed the code check.")
 
     def _getFolderList(self, fileList):
         """@param fileList A list of local files to be loaded to the MCU flash.
