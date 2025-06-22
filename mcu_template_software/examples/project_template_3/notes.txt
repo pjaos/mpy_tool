@@ -1,0 +1,10 @@
+## Upload a binary file to the webserver
+
+Example using the curl cmd to send the local file, bootloader.bin, to the remote folder firmware/boot
+
+```
+curl -X POST http://192.168.0.74:5000/upload --data-binary "@bootloader.bin" -H "Content-Type: applic
+```
+
+```
+curl "http://<esp32-ip>:5000/fs?path=/app1"```

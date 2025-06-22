@@ -1,0 +1,1 @@
+This micropython has the st7789 module compiled in.
