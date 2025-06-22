@@ -1,31 +1,35 @@
 import json
+from lib.hardware import const
 
 
 class MachineConfig(object):
     """@brief Responsible for management of config attributes for the machine.
               The machine configuration is saved to flash for persistent storage."""
+    FACTORY_CONFIG_FILENAME = const("factory.cfg")
 
-    CONFIG_FILENAME = "this.machine.cfg"
-    FACTORY_CONFIG_FILENAME = "factory.cfg"
+    #This must be set when app1/app.py or app2/app.py is called from main.py
+    CONFIG_FILENAME = None
 
     # Keys must be int values. Values less than 0 are reserved.
 
-    RUNNING_APP_KEY = "RUNNING_APP"  # This dict key is reserved for the key that defines
-    # which app is running. USer defines keys should be 0
-    # or greater.
-    WIFI_KEY = "WIFI"  # Holds a sub dict of the WiFi configuration.
+    #This must be set when app1/app.py or app2/app.py is called from main.py
+    RUNNING_APP_KEY = None  # This dict key is reserved for the key that defines
 
-    WIFI_CONFIGURED_KEY = "WIFI_CONFIGURED"
-    MODE_KEY = "MODE"
-    AP_CHANNEL_KEY = "AP_CHANNEL"
-    SSID_KEY = "SSID"
-    PASSWORD_KEY = "PASSWORD"
+    # which app is running. User defines keys should be 0
+    # or greater.
+    WIFI_KEY = const("WIFI")  # Holds a sub dict of the WiFi configuration.
+
+    WIFI_CONFIGURED_KEY = const("WIFI_CONFIGURED")
+    MODE_KEY = const("MODE")
+    AP_CHANNEL_KEY = const("AP_CHANNEL")
+    SSID_KEY = const("SSID")
+    PASSWORD_KEY = const("PASSWORD")
 
     AP_MODE = 0
     STA_MODE = 1
     DEFAULT_AP_CHANNEL = 3
-    DEFAULT_AP_PASSWORD = "12345678"
-    DEFAULT_SSID = ""
+    DEFAULT_AP_PASSWORD = const("12345678")
+    DEFAULT_SSID = const("")
 
     DEFAULT_WIFI_DICT = {
         WIFI_CONFIGURED_KEY: 0,
@@ -66,6 +70,10 @@ class MachineConfig(object):
         except BaseException:
             config_dict = self._defaultConfigDict
 
+        # Delete the dict created before the running app key was defined.
+        if "null" in config_dict:
+            del config_dict["null"]
+
         # Merge the factory config into the machine config file if present.
         factory_dict = {}
         try:
@@ -84,6 +92,15 @@ class MachineConfig(object):
         self._config_dict = MachineConfig.Merge(
             self._defaultConfigDict, config_dict)
         self._ensure_valid_cfg_dict(self._config_dict)
+
+        # Remove keys not in the default dict if required
+        if purge_keys:
+            for key in self._config_dict:
+                # If not one of the protected keys that must be present
+                if key != MachineConfig.RUNNING_APP_KEY and \
+                   key != MachineConfig.WIFI_KEY:
+                    if key not in self._defaultConfigDict:
+                        del self._config_dict[key]
 
         self.store()
 

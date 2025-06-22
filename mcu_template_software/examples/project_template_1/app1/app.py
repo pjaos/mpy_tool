@@ -1,5 +1,3 @@
-# import  uasyncio as asyncio
-
 # from machine import WDT
 
 from time import time, sleep
@@ -14,11 +12,21 @@ SHOW_MESSAGES_ON_STDOUT = True
 WDT_TIMEOUT_MSECS = 8300
 
 
-async def start(config_file, active_app_key, active_app):
-    """@brief The app entry point
-       @param config_file The config file that holds all machine config including the active application ID.
-       @param active_app_key The key in the config dict that details which app (1 or 2) we are running from.
-       @param active_app The active app. Either 1 or 2."""
+async def start(runningAppKey, configFilename):
+    """@brief The app entry point.
+       @param runningAppKey The KEY in the config dict that holds the current running app.
+       @param configFilename The name of the config file. This sits in / on flash."""
+    MachineConfig.RUNNING_APP_KEY = runningAppKey
+    MachineConfig.CONFIG_FILENAME = configFilename
+    file_path = __file__
+    if file_path.startswith('app1'):
+        active_app = 1
+
+    elif file_path.startswith('app2'):
+        active_app = 2
+
+    else:
+        raise Exception(f"App path not /app1 or /app2: {file_path}")
 
     if SHOW_MESSAGES_ON_STDOUT:
         uo = UO(enabled=True, debug_enabled=True)
@@ -34,6 +42,21 @@ async def start(config_file, active_app_key, active_app):
 class BaseMachine(UOBase):
     def __init__(self, uo):
         super().__init__(uo)
+
+
+class ThisMachineConfig(MachineConfig):
+    """@brief Defines the config specific to required for this machine."""
+
+    # Note that
+    # MachineConfig.RUNNING_APP_KEY and
+    # MachineConfig.WIFI_KEY will added automatically so we only need
+    # to define keys that are specific to this machine type.
+
+    ACTIVE = "ACTIVE"
+    DEFAULT_CONFIG = {ACTIVE: True}
+
+    def __init__(self):
+        super().__init__(ThisMachineConfig.DEFAULT_CONFIG)
 
 
 class ThisMachine(BaseMachine):
@@ -57,7 +80,7 @@ class ThisMachine(BaseMachine):
         self._init()
 
     def _init(self):
-        self._machine_config = MachineConfig(ThisMachine.DEFAULT_CONFIG)
+        self._machine_config = ThisMachineConfig()
 
     def pat_wdt(self):
         if self._wdt:

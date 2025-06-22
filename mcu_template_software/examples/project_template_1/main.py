@@ -2,8 +2,6 @@ import sys
 import json
 import uasyncio as asyncio
 
-# These are duplicated in app1/lib/config.py or app2/lib/config.py files.
-# We don't import them because they may be present in different locations.
 RUNNING_APP_KEY = "RUNNING_APP"
 CONFIG_FILENAME = "this.machine.cfg"
 
@@ -58,7 +56,7 @@ def run_app(app_id, initial_modules):
         sys.path.append("/app1.lib")
         from app1 import app
 
-    asyncio.run(app.start(CONFIG_FILENAME, RUNNING_APP_KEY, active_app))
+    asyncio.run(app.start(RUNNING_APP_KEY, CONFIG_FILENAME))
 
 
 def debug(msg):

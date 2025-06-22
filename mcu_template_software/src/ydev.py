@@ -5,8 +5,6 @@ import uasyncio as asyncio
 from lib.uo import UOBase
 from lib.wifi import WiFi
 
-from constants import Constants
-
 
 class YDev(UOBase):
     """brief A Yview device implementation using micro python.
@@ -16,7 +14,7 @@ class YDev(UOBase):
     AYT_KEY = "AYT"             # The key in the received JSON message.
     # The AYT key in the RX'ed JSON message must hold this value in
     # order to send a response to let the YView gateway know the device details.
-    ID_STRING = "-!#8[dk_g^v\'s!d_rzn_e}6}8sP9}QoIR#?O&pg)Qra"
+    ID_STRING = "-!#8[dkG^v's!dRznE}6}8sP9}QoIR#?O&pg)Qra"
 
     # These are the attributes for the AYT response message
     IP_ADDRESS_KEY = "IP_ADDRESS"      # The IP address of this device
@@ -30,13 +28,14 @@ class YDev(UOBase):
     # needed.
     GROUP_NAME_KEY = "GROUP_NAME"
 
-    YDEV_AYT_TCP_PORT_KEY       = "YDEV_AYT_TCP_PORT_KEY"
-    YDEV_OS_KEY                 = "YDEV_OS"
-    YDEV_UNIT_NAME_KEY          = "YDEV_UNIT_NAME"      # The name the user wishes to give the unit
-    YDEV_PRODUCT_ID_KEY         = "YDEV_PRODUCT_ID"     # The product ID. E.G the model number. This is not writable as not write code is present in cmd_handler.
-    YDEV_DEVICE_TYPE_KEY        = "YDEV_DEVICE_TYPE"    # The type of device of the unit. This is not writable as not write code is present in cmd_handler.
-    YDEV_SERVICE_LIST_KEY       = "YDEV_SERVICE_LIST"   # A comma separated list of <service name>:<TCPIP port> that denote the service supported (E.G WEB:80). This is not writable as not write code is present in cmd_handler.
-    YDEV_GROUP_NAME_KEY         = "YDEV_GROUP_NAME"
+    ACTIVE                 = "ACTIVE"
+    AYT_TCP_PORT_KEY       = "AYT_TCP_PORT_KEY"
+    OS_KEY                 = "OS"
+    UNIT_NAME_KEY          = "UNIT_NAME"      # The name the user wishes to give the unit
+    PRODUCT_ID_KEY         = "PRODUCT_ID"     # The product ID. E.G the model number. This is not writable as not write code is present in cmd_handler.
+    DEVICE_TYPE_KEY        = "DEVICE_TYPE"    # The type of device of the unit. This is not writable as not write code is present in cmd_handler.
+    SERVICE_LIST_KEY       = "SERVICE_LIST"   # A comma separated list of <service name>:<TCPIP port> that denote the service supported (E.G WEB:80). This is not writable as not write code is present in cmd_handler.
+    GROUP_NAME_KEY         = "GROUP_NAME"
 
     def __init__(self, machine_config, uo=None):
         """@brief Constructor.
@@ -44,7 +43,7 @@ class YDev(UOBase):
            @param uo A UO instance or None if no user output messages are needed."""
         super().__init__(uo=uo)
         self._machineConfig = machine_config
-        self._yDevAYTPort = self._machineConfig.get(YDev.YDEV_AYT_TCP_PORT_KEY)
+        self._yDevAYTPort = self._machineConfig.get(YDev.AYT_TCP_PORT_KEY)
         self._running = False
         self._getParamsMethod = None
         self.listen()
@@ -56,12 +55,12 @@ class YDev(UOBase):
         address = WiFi.GetWifiAddress()
         json_dict = {}
         json_dict[YDev.IP_ADDRESS_KEY] = address
-        json_dict[YDev.OS_KEY] = self._machineConfig.get(YDev.YDEV_OS_KEY)
-        json_dict[YDev.UNIT_NAME_KEY] = self._machineConfig.get(YDev.YDEV_UNIT_NAME_KEY)
-        json_dict[YDev.PRODUCT_ID_KEY] = self._machineConfig.get(YDev.YDEV_PRODUCT_ID_KEY)
-        json_dict[YDev.DEVICE_TYPE_KEY] = self._machineConfig.get(YDev.YDEV_DEVICE_TYPE_KEY)
-        json_dict[YDev.SERVICE_LIST_KEY] = self._machineConfig.get(YDev.YDEV_SERVICE_LIST_KEY)
-        json_dict[YDev.GROUP_NAME_KEY] = self._machineConfig.get(YDev.YDEV_GROUP_NAME_KEY)
+        json_dict[YDev.OS_KEY] = self._machineConfig.get(YDev.OS_KEY)
+        json_dict[YDev.UNIT_NAME_KEY] = self._machineConfig.get(YDev.UNIT_NAME_KEY)
+        json_dict[YDev.PRODUCT_ID_KEY] = self._machineConfig.get(YDev.PRODUCT_ID_KEY)
+        json_dict[YDev.DEVICE_TYPE_KEY] = self._machineConfig.get(YDev.DEVICE_TYPE_KEY)
+        json_dict[YDev.SERVICE_LIST_KEY] = self._machineConfig.get(YDev.SERVICE_LIST_KEY)
+        json_dict[YDev.GROUP_NAME_KEY] = self._machineConfig.get(YDev.GROUP_NAME_KEY)
         if self._getParamsMethod is not None:
             # !!! If this method blocks it will delay the AYT message response
             params_dict = self._getParamsMethod()
@@ -69,19 +68,20 @@ class YDev(UOBase):
                 json_dict[key] = params_dict[key]
 
         active = True
-        if Constants.ACTIVE in json_dict:
-            active = json_dict[Constants.ACTIVE]
+        if YDev.ACTIVE in json_dict:
+            active = json_dict[YDev.ACTIVE]
         if active:
             json_dict_str = json.dumps(json_dict)
-            self._debug("AYT response message: {}".format(json_dict_str))
+            self.debug("AYT response message: {}".format(json_dict_str))
             sock.sendto(json_dict_str.encode(), remote_address_port)
-            self._debug(
+            self.debug(
                 "Sent above message to {}:{}".format(
                     remote_address_port[0],
                     remote_address_port[1]))
 
     def set_get_params_method(self, get_params_method):
-        """@brief Set reference to a method that will retrieve parameters to be included in the AYT response message."""
+        """@brief Set reference to a method that will retrieve parameters to be included in the AYT response message.
+                  The get_params_method must return a dictionary. This will be included in the YDEV AYT response."""
         self._getParamsMethod = get_params_method
 
     async def listen(self):
@@ -100,7 +100,11 @@ class YDev(UOBase):
                     id_str = rx_dict[YDev.AYT_KEY]
                     if id_str == YDev.ID_STRING:
                         self._send_response(sock, address_port)
+
             except Exception:
                 # We get here primarily when no data is present on the socket
                 # when recvfrom is called.
                 await asyncio.sleep(0.1)
+
+
+

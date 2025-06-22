@@ -1,22 +1,34 @@
 # from machine import WDT
 
 import os
+import asyncio
 from time import time, sleep
 
 from lib.uo import UO, UOBase
 from lib.config import MachineConfig
 from lib.wifi import WiFi
 from lib.hardware import Hardware
+from lib.ydev import YDev
 
 SHOW_MESSAGES_ON_STDOUT = True  # Turning this off will stop messages being sent on the serial port and will reduce CPU usage.
 WDT_TIMEOUT_MSECS = 8300        # Note that 8388 is the max WD timeout value on pico W hardware.
 
 
-async def start(config_file, active_app_key, active_app):
-    """@brief The app entry point
-       @param config_file The config file that holds all machine config including the active application ID.
-       @param active_app_key The key in the config dict that details which app (1 or 2) we are running from.
-       @param active_app The active app. Either 1 or 2."""
+async def start(runningAppKey, configFilename):
+    """@brief The app entry point.
+       @param runningAppKey The KEY in the config dict that holds the current running app.
+       @param configFilename The name of the config file. This sits in / on flash."""
+    MachineConfig.RUNNING_APP_KEY = runningAppKey
+    MachineConfig.CONFIG_FILENAME = configFilename
+    file_path = __file__
+    if file_path.startswith('app1'):
+        active_app = 1
+
+    elif file_path.startswith('app2'):
+        active_app = 2
+
+    else:
+        raise Exception(f"App path not /app1 or /app2: {file_path}")
 
     if SHOW_MESSAGES_ON_STDOUT:
         uo = UO(enabled=True, debug_enabled=True)
@@ -29,6 +41,28 @@ async def start(config_file, active_app_key, active_app):
     this_machine.start()
 
 
+class ThisMachineConfig(MachineConfig):
+    """@brief Defines the config specific to this machine."""
+
+    # Note that
+    # MachineConfig.RUNNING_APP_KEY and
+    # MachineConfig.WIFI_KEY will added automatically so we only need
+    # to define keys that are specific to this machine type here.
+
+    DEFAULT_CONFIG = {YDev.ACTIVE: True,
+                      YDev.AYT_TCP_PORT_KEY: 2934,               # The UDP port we expect to receive an AYT UDP broadcast message
+                      YDev.OS_KEY: "MicroPython",
+                      YDev.UNIT_NAME_KEY: "DEV_NAME",            # This can be used to identify device, probably user configurable.
+                      YDev.PRODUCT_ID_KEY: "PRODUCT_ID",         # This is fixed for the product, probably during MFG.
+                      YDev.DEVICE_TYPE_KEY: "DEV_TYPE",          # This is fixed for the product, probably during MFG.
+                      YDev.SERVICE_LIST_KEY: "web:80",           # A service name followed by the TCPIP port number this device presents the service on.
+                      YDev.GROUP_NAME_KEY: ""                    # Used put devices in a group for mild isolation purposes.
+                      }
+
+    def __init__(self):
+        super().__init__(ThisMachineConfig.DEFAULT_CONFIG)
+
+
 class BaseMachine(UOBase):
 
     def __init__(self, uo):
@@ -36,7 +70,7 @@ class BaseMachine(UOBase):
         self._wdt = None
 
     def _init(self):
-        self._machine_config = MachineConfig(ThisMachine.DEFAULT_CONFIG)
+        self._machine_config = ThisMachineConfig()
 
     def pat_wdt(self):
         if self._wdt:
@@ -68,9 +102,10 @@ class BaseMachine(UOBase):
 class ThisMachine(BaseMachine):
     """@brief Implement functionality required by this project."""
 
+    DEFAULT_CONFIG = {}
+
     # This value must be less than the WDT_TIMEOUT_MSECS if the WDT is enabled.
     SERVICE_LOOP_MILLISECONDS = 200
-
     # The MAX time to wait for an STA to register.
     # After this time has elapsed the unit will either reboot
     # or if the hardware has the capability, power cycle itself.
@@ -88,9 +123,6 @@ class ThisMachine(BaseMachine):
     # Typically GPIO 2 on an esp32 MCU.
     # Typically GPIO 16 on a RPi pico W MCU.
     WIFI_LED_PIN = 2
-
-    ACTIVE = "ACTIVE"
-    DEFAULT_CONFIG = {ACTIVE: True}
 
     def __init__(self, uo):
         super().__init__(uo)
@@ -113,6 +145,9 @@ class ThisMachine(BaseMachine):
 
         # Connect this machine to a WiFi network.
         self._sta_connect_wifi()
+
+        ydev = YDev(self._machine_config)
+        asyncio.create_task(ydev.listen())
 
         from lib.webserver import WebServer
         web_server = WebServer(self._machine_config,
