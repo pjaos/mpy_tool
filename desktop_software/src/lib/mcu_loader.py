@@ -502,8 +502,8 @@ class USBLoader(LoaderBase):
     ESP32C3_MICROPYTHON_IMAGE       = "micropython.bin"
     ESP32C3_PARTITION_TABLE_IMAGE   = "partition-table.bin"
     ESP32C6_BOOTLOADER_IMAGE        = ESP32C3_BOOTLOADER_IMAGE
+    ESP32C6_PARTITION_TABLE_IMAGE   = ESP32C3_PARTITION_TABLE_IMAGE
     ESP32C6_MICROPYTHON_IMAGE       = ESP32C3_MICROPYTHON_IMAGE
-    ESP32C6_PARTITION_TABLE_IMAGE   = ESP32C3_MICROPYTHON_IMAGE
     ESPTOOL_DETECTING_CHIP_TYPE     = "Detecting chip type..."
     RPI_BOOT_BTN_DWN_FILE_LIST      = ["index.htm", "info_uf2.txt"]
     ERASE_PCIO_FLASH                = 1
@@ -585,9 +585,9 @@ class USBLoader(LoaderBase):
         """@return A Tuple containing the files to load to an ESP32 C3."""
         folder = os.path.join(USBLoader.GetESP32ImagesFolder(), 'esp32c3')
         bootLoaderFile = os.path.join(folder, USBLoader.ESP32C3_BOOTLOADER_IMAGE)
-        microPythonFile = os.path.join(folder, USBLoader.ESP32C3_MICROPYTHON_IMAGE)
         partionTableFile = os.path.join(folder, USBLoader.ESP32C3_PARTITION_TABLE_IMAGE)
-        fileList = (bootLoaderFile, microPythonFile, partionTableFile)
+        microPythonFile = os.path.join(folder, USBLoader.ESP32C3_MICROPYTHON_IMAGE)
+        fileList = (bootLoaderFile, partionTableFile, microPythonFile)
         for _file in fileList:
             if not os.path.isfile(_file):
                 raise Exception(f"{_file} file not found.")
@@ -598,9 +598,9 @@ class USBLoader(LoaderBase):
         """@return A Tuple containing the files to load to an ESP32 C6."""
         folder = os.path.join(USBLoader.GetESP32ImagesFolder(), 'esp32c6')
         bootLoaderFile = os.path.join(folder, USBLoader.ESP32C6_BOOTLOADER_IMAGE)
-        microPythonFile = os.path.join(folder, USBLoader.ESP32C6_MICROPYTHON_IMAGE)
         partionTableFile = os.path.join(folder, USBLoader.ESP32C6_PARTITION_TABLE_IMAGE)
-        fileList = (bootLoaderFile, microPythonFile, partionTableFile)
+        microPythonFile = os.path.join(folder, USBLoader.ESP32C6_MICROPYTHON_IMAGE)
+        fileList = (bootLoaderFile, partionTableFile, microPythonFile)
         for _file in fileList:
             if not os.path.isfile(_file):
                 raise Exception(f"{_file} file not found.")
@@ -893,7 +893,7 @@ class USBLoader(LoaderBase):
         serialPortDevice = self._getSerialPort()
         esp32_type = self._get_esp32_type()
         if esp32_type == USBLoader.ESP32C3_MCU_TYPE:
-            bootloader_file, micropython_file, partitiontable_file = USBLoader.GetESP32C3MicroPythonFiles()
+            bootloader_file, partitiontable_file, micropython_file = USBLoader.GetESP32C3MicroPythonFiles()
             # Dummy first argument, esptool
             args = ['esptool',
                     '--chip', 'esp32c3',
@@ -906,11 +906,11 @@ class USBLoader(LoaderBase):
                     '--flash_freq', '80m',
                     '--flash_size', '4MB',
                     '0x0', f'{bootloader_file}',
-                    '0x10000', f'{micropython_file}',
-                    '0x8000', f'{partitiontable_file}']
+                    '0x8000', f'{partitiontable_file}',
+                    '0x10000', f'{micropython_file}']
 
         elif esp32_type == USBLoader.ESP32C6_MCU_TYPE:
-            bootloader_file, micropython_file, partitiontable_file = USBLoader.GetESP32C6MicroPythonFiles()
+            bootloader_file, partitiontable_file, micropython_file = USBLoader.GetESP32C6MicroPythonFiles()
             # Dummy first argument, esptool
             args = ['esptool',
                     '--chip', 'esp32c6',
@@ -923,8 +923,8 @@ class USBLoader(LoaderBase):
                     '--flash_freq', '80m',
                     '--flash_size', '4MB',
                     '0x0', f'{bootloader_file}',
-                    '0x10000', f'{micropython_file}',
-                    '0x8000', f'{partitiontable_file}']
+                    '0x8000', f'{partitiontable_file}',
+                    '0x10000', f'{micropython_file}']
 
         else:
             microPythonImageFile = USBLoader.GetESP32MicroPythonFile()
