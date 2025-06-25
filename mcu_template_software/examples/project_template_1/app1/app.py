@@ -52,8 +52,7 @@ class ThisMachineConfig(MachineConfig):
     # MachineConfig.WIFI_KEY will added automatically so we only need
     # to define keys that are specific to this machine type.
 
-    ACTIVE = "ACTIVE"
-    DEFAULT_CONFIG = {ACTIVE: True}
+    DEFAULT_CONFIG = {}
 
     def __init__(self):
         super().__init__(ThisMachineConfig.DEFAULT_CONFIG)
