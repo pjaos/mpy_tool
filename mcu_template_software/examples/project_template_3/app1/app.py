@@ -111,8 +111,9 @@ class ThisMachine(BaseMachine):
     # The GPIO pin connected to the WiFi indicator LED (-1 = not used).
     # This flashes when not connected and turns solid on when connected to a WiFi network.
     # Typically GPIO 2 on an esp32 MCU.
+    # Typically GPIO 8 on an esp32-c3 MCU.
     # Typically GPIO 16 on a RPi pico W MCU.
-    WIFI_LED_PIN = 2
+    WIFI_LED_PIN = 8
 
     def __init__(self, uo):
         super().__init__(uo)
