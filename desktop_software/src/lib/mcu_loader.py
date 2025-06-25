@@ -818,28 +818,41 @@ class USBLoader(LoaderBase):
 
     def _run_esptool_capture(self, args):
         """@brief run the esptool to execute command/s on attached esp32 devices.
-           @param args The arument list for the esptool command."""
+           @param args The argument list for the esptool command."""
+        error = True
         try:
-            self.debug(f"EXECUTING: {str(args)}")
+            self.debug(f"EXECUTING: {str(args)} ^^^^^^^^^^^^^^^^^^^^")
             # Save original argv to restore later
             original_argv = sys.argv
             sys.argv = args
             # Capture output
-            buffer = io.StringIO()
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
             sys_stdout = sys.stdout
-            sys.stderr = sys.stdout  # Optional: combine stdout and stderr
-            sys.stdout = buffer
+            sys_stderr = sys.stderr
+            sys.stdout = stdout_buffer
+            sys.stderr = stderr_buffer
 
             try:
                 esptool._main()
+                error = False
             except SystemExit:
-                raise
+                pass
+
+            except Exception:
+                pass
 
             finally:
+                # Restore org stderr and stdout
+                sys.stderr = sys_stderr
                 sys.stdout = sys_stdout
-
-            response = buffer.getvalue()
+            stderr_str = stderr_buffer.getvalue()
+            stdout_str = stdout_buffer.getvalue()
+            # Combine stdout and stderr
+            response = stdout_str + "\n" + stderr_str
             self.debug(f"RESPONSE: {response}")
+            if error:
+                raise Exception(f"Command Execution Failed: {" ".join((args))}")
             return response
 
         finally:
