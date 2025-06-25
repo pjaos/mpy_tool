@@ -17,7 +17,6 @@ import sys
 
 from   p3lib.helper import get_assets_folder
 
-from pyflakes import reporter as modReporter
 from pyflakes.reporter import Reporter
 from pyflakes.api import checkRecursive
 from lib.general import MCUBase
