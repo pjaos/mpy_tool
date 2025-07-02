@@ -141,12 +141,32 @@ class ThisMachine(BaseMachine):
         # The WDT will then trigger a reboot.
     #        self._wdt = WDT(timeout=WDT_TIMEOUT_MSECS)
 
+    async def _updateTemp(self, paramDict):
+        """@brief Example code to update the temperature and humidity.
+                  In reality you are likely to read values from sensor/s. """
+        from math import floor
+        from random import random
+        #This task runs while the webserver is running.
+        while True:
+            # Move temp and humidity by small amounts so user can see
+            # values changing
+            temp = paramDict['temperature']
+            value = floor(float(temp)) + random()
+            paramDict['temperature'] = f"{value:.3f}"
+
+            humidity = paramDict['humidity']
+            value = floor(float(humidity)) + random()
+            paramDict['humidity'] = f"{value:.3f}"
+
+            await asyncio.sleep(1)
+
     def start(self):
         self.show_ram_info()
 
         # Connect this machine to a WiFi network.
         self._sta_connect_wifi()
 
+        # Task that will return JSON messages to the YDev server.
         ydev = YDev(self._machine_config)
         asyncio.create_task(ydev.listen())
 
@@ -154,4 +174,7 @@ class ThisMachine(BaseMachine):
         web_server = WebServer(self._machine_config,
                                self._startTime,
                                uo=self._uo)
+        paramDict = {'temperature': 24.5, 'humidity': 60}
+        asyncio.create_task(self._updateTemp(paramDict))
+        web_server.setParamDict(paramDict)
         web_server.run()

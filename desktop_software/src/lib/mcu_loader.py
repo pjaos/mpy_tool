@@ -32,7 +32,13 @@ class LoaderBase(MCUBase):
     MICROPYTHON_FILE_EXTENSION  = ".mpy"
     MACHINE_CONFIG_FILE         = "this.machine.cfg"
     BLUETOOTH_ON_KEY            = 'BLUETOOTH_ON_KEY'
-    WIFI_CFG_KEY                = "WIFI"
+    WIFI_KEY                    = "WIFI"
+    AP_CHANNEL_KEY              = "AP_CHANNEL"
+    MODE_KEY                    = "MODE"
+    PASSWORD_KEY                = "PASSWORD"
+    WIFI_CONFIGURED_KEY         = "WIFI_CONFIGURED"
+    SSID_KEY                    = "SSID"
+
     MAIN_PYTHON_FILE            = "main.py"
     MAIN_MICROPYTHON_FILE       = "main.mpy"
 
@@ -248,6 +254,7 @@ class LoaderBase(MCUBase):
         self._mcu = mcu
         self._ser = None
         self._tempFolder = LoaderBase.GetTempFolder()
+        self._appRootFolder = None
 
     def _isPico(self):
         pico=False
@@ -409,13 +416,11 @@ class LoaderBase(MCUBase):
            @param ssid The Wifi SSID/network.
            @param password The WiFi password.
            @return The WiFi configuration dict."""
-        # YDEV devices use integers for config dict keys to key dict size down.
-        # WIFI_CONFIGURED_KEY = -3
-        # MODE_KEY = -4
-        # AP_CHANNEL_KEY = -5
-        # SSID_KEY = -6
-        # PASSWORD_KEY = -7
-        return {"-4": 1, "-6": ssid, "-7": password, "-5": 3, "-3": 1}
+        return {LoaderBase.MODE_KEY: 1,
+                LoaderBase.SSID_KEY: ssid,
+                LoaderBase.PASSWORD_KEY: password,
+                LoaderBase.AP_CHANNEL_KEY: 3,
+                LoaderBase.WIFI_CONFIGURED_KEY: 1}
 
     def _convertToMPY(self, pyFileList):
         """@brief Generate *.mpy files for all files in app1 and app1/lib
@@ -489,6 +494,16 @@ class LoaderBase(MCUBase):
             except:
                 pass
         return pingSec
+
+    def checkMCUCode(self):
+        """@brief Run pyflakes3 on the app1 folder code to check for errors before loading it."""
+        self.info("Checking python code in the app1 folder using pyflakes")
+        messages = USBLoader.CheckPythonCode(self._appRootFolder)
+        if len(messages) > 0:
+            self.error(messages)
+            raise Exception("Errors were found in the Python MCU code. Fix these and try again.")
+        self.info("Python MCU code passed the code check.")
+
 
 class USBLoader(LoaderBase):
     PICO_IMAGE_FOLDER_NAME          = os.path.join("picow_flash_images", "pico1w")
@@ -1017,7 +1032,7 @@ class USBLoader(LoaderBase):
             self.debug(f"ORG CONFIG: <{orgConfigStr}>")
             # Set the house WiFi configuration in the machine config dict
             # WiFi key is -2 for Ydev devices
-            thisMachineDict["-2"] = self._getWiFiDict(ssid, password)
+            thisMachineDict[USBLoader.WIFI_KEY] = self._getWiFiDict(ssid, password)
             newConfigStr = json.dumps(thisMachineDict, indent=4)
             self.debug(f"NEW CONFIG: <{newConfigStr}>")
             # Ensure bluetooth is turned off now we have configured the WiFi.
@@ -1036,7 +1051,7 @@ class USBLoader(LoaderBase):
         self._runRShell((f'cp "{localMachineCfgFile}" /pyboard/',) )
         return self._runApp()
 
-    def _runApp(self, waitForIPAddress=True, timeoutSec=120):
+    def _runApp(self, waitForIPAddress=True, timeoutSec=10):
         """@brief Run the firmware on the MCU.
            @param waitForIPAddress If True wait for an IP address to be allocated to the unit.
            @return The IP address that the MCU obtains when registered on the WiFi if waitForIPAddress == True or None if not."""
@@ -1141,15 +1156,6 @@ class MCULoader(LoaderBase):
 
         else:
             raise Exception(f'{self._appRootFolder} folder not found.')
-
-    def checkMCUCode(self):
-        """@brief Run pyflakes3 on the app1 folder code to check for errors before loading it."""
-        self.info("Checking python code in the app1 folder using pyflakes")
-        messages = USBLoader.CheckPythonCode(self._appRootFolder)
-        if len(messages) > 0:
-            self.error(messages)
-            raise Exception("Errors were found in the Python MCU code. Fix these and try again.")
-        self.info("Python MCU code passed the code check.")
 
     def _getFolderList(self, fileList):
         """@param fileList A list of local files to be loaded to the MCU flash.
@@ -1618,6 +1624,7 @@ class UpgradeManager(LoaderBase):
             raise Exception(f"{address} is not reachable on the network.")
         startTime = time()
         self._appRootFolder = MCULoader.GetAppRootPath(appRootPath)
+        self.checkMCUCode()
         appSize = self._getSize(self._appRootFolder)
         self.info(f"Performing an OTA upgrade of {address}")
         # We need to erase any data in the inactive partition to see if we have space for the new app

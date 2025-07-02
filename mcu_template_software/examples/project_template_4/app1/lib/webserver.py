@@ -6,7 +6,7 @@ import binascii
 import ujson as json
 from time import time
 
-from lib.microdot.microdot import Microdot
+from lib.microdot.microdot import Microdot, Response
 from lib.config import MachineConfig
 from lib.io import IO
 from lib.hardware import const, Hardware
@@ -56,6 +56,26 @@ class WebServer():
         self._uo = uo
         self._port = port
         self._startTime = startTime
+        self._paramDict = None
+
+    def setParamDict(self, paramDict):
+        """@brief Set the dictionary holding parameters that are used to replace text in html files as they are loaded.
+           @param paramDict A dictionary that holds the following.
+                  key = The text of the variable in the html file. E.G If {{ temperature }} text is in the html file. The key would be temperature.
+                  value = The text to replace the above. E.G if the text is 24.5 then '{{ temperature }}' is remove and replaced with 24.5."""
+        self._paramDict = paramDict
+
+    def _updateContent(self, template_bytes, values_dict, start = b'{{ ', stop = b' }}'):
+        """@brief Insert the values into an HTML page.
+           @param template_bytes The html file contents read from flash.
+           @param values_dict The dict containing the values. The key is the parameter text between start and stop bytes.
+           @param start = The bytes (not string) that appears before the variable name in the html file.
+           @param start = The bytes (not string) that appears after the variable name in the html file."""
+        for key, val in values_dict.items():
+            placeholder = start + key.encode() + stop
+            value_bytes = str(val).encode()
+            template_bytes = template_bytes.replace(placeholder, value_bytes)
+        return template_bytes
 
     def _addRamStats(self, responseDict):
         """@brief Update the RAM usage stats.
@@ -325,6 +345,46 @@ class WebServer():
         responseDict = WebServer.GetOKDict()
         return responseDict
 
+    def getContentType(self, filename):
+        if filename.endswith('.html'):
+            return 'text/html'
+        elif filename.endswith('.css'):
+            return 'text/css'
+        elif filename.endswith('.js'):
+            return 'application/javascript'
+        elif filename.endswith('.json'):
+            return 'application/json'
+        elif filename.endswith('.png'):
+            return 'image/png'
+        elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+            return 'image/jpeg'
+        elif filename.endswith('.gif'):
+            return 'image/gif'
+        elif filename.endswith('.svg'):
+            return 'image/svg+xml'
+        elif filename.endswith('.ico'):
+            return 'image/x-icon'
+        else:
+            return 'application/octet-stream'
+
+    def _mkdirs(self, path):
+        """@brief Recursively create directories like os.makedirs()
+           @param path The path to create"""
+        parts = path.split('/')
+        current = ''
+        for part in parts:
+            if not part:
+                continue  # Skip empty parts (e.g. from leading '/')
+            current += '/' + part
+            try:
+                os.mkdir(current)
+            except OSError as e:
+                if e.args[0] == 17:
+                    # EEXIST — already exists, so continue
+                    continue
+                else:
+                    raise
+
     def run(self):
         """@brief This is a blocking method that starts the web server."""
 
@@ -339,29 +399,7 @@ class WebServer():
         def return_error(msg):
             return get_json(WebServer.GetErrorDict(msg))
 
-        html = '''<!DOCTYPE html>
-        <html>
-            <head>
-                <title>Microdot Example Page</title>
-                <meta charset="UTF-8">
-            </head>
-            <body>
-                <div>
-                    <h1>Microdot Example Page</h1>
-                    <p>Hello from Microdot!</p>
-                    <p><a href="/shutdown">Click to shutdown the server</a></p>
-                </div>
-            </body>
-        </html>
-        '''
-        # PJA
-        print(html)
-
         app = Microdot()
-
-        @app.route('/')
-        async def hello(request):
-            return html, 200, {'Content-Type': 'text/html'}
 
         @app.post('/upload')
         async def upload(request):
@@ -370,19 +408,11 @@ class WebServer():
                 # Ensure parent directory exists
                 dir_name = '/'.join(path.split('/')[:-1])
                 if dir_name and dir_name not in os.listdir():
-                    try:
-                        os.mkdir(dir_name)
-                    except OSError:
-                        pass  # Folder may already exist, or can't be created
+                    self._mkdirs(dir_name)
 
                 # Write the uploaded binary data
                 with open(path, 'wb') as f:
                     f.write(request.body)
-
-#            self.collectGarbage()
-#            statsDict = {}
-#            self._addRamStats(statsDict)
-#            print(f'PJA: >>>>>X>>>>>> statsDict: {str(statsDict)}')
 
             return get_json(WebServer.GetOKDict())
 
@@ -452,11 +482,31 @@ class WebServer():
 
         @app.route('/gc')
         async def gc(request):
-            return get_json(self.gc())
+            return get_json(self.collectGarbage())
 
         @app.route('/shutdown')
         async def shutdown(request):
             request.app.shutdown()
             return get_json(WebServer.GetErrorDict("The server is shutting down..."))
+
+        @app.route('/')
+        @app.route('/<path:path>')
+        def serve(request, path='index.html'):
+            # Prevent directory traversal
+            if '..' in path or path.startswith('/'):
+                return '403 Forbidden', 403
+
+            try:
+                appFolder = self.getActiveAppFolder()[WebServer.ACTIVE_APP_FOLDER_KEY]
+                serverFile = f'{appFolder}/assets/{path}'
+                with open(serverFile, 'rb') as f:
+                    content = f.read()
+                    if self._paramDict:
+                        content = self._updateContent(content, self._paramDict)
+                    content_type = self.getContentType(path)
+                    return Response(body=content, headers={'Content-Type': content_type})
+
+            except Exception:
+                return '404 Not Found', 404
 
         app.run(debug=True, port=self._port)
