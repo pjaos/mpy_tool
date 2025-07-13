@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mpy_tool"
-version = "0.12"
+version = "0.132"
 description = ""
 authors = ["Paul Austen <pjaos@gmail.com>"]
 readme = "README.md"
@@ -19,7 +19,7 @@ python = ">=3.12,<3.14"
 # Cross-platform packages
 paramiko = "*"
 retry = "*"
-p3lib = "^1.1.125"
+p3lib = "^1.1.132"
 esptool = "*"
 nicegui = "*"
 pyflakes = "*"
@@ -28,6 +28,8 @@ mpy_cross = "*"
 ping3 = "*"
 bleak = "^0.22.3"
 plotly = "*"
+pillow = "*"
+requests = "*"
 
 # Windows-only dependencies
 pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
