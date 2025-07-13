@@ -1,9 +1,6 @@
-# Example Project 3
+# Example Project 2
 
-Template project
-
-- With WiFi that can be setup via bluetooth
-- Start the microdot webserver.
+Project template with WiFi that can be setup via bluetooth.
 
 Add project code to app1/app.py file ThisMachine.start() method.
 
@@ -24,13 +21,3 @@ INFO:  YDev device IP address = X.X.X.X
 INFO:  Turning off bluetooth interface on YDev device.
 INFO:  Device WiFi setup complete.
 ```
-
-If you open a web browser and connect to http://<MCU IP ADDRESS>:80
-you should receive.
-
-'''
-Microdot Example Page
-Hello from Microdot!
-
-Click to shutdown the server
-'''

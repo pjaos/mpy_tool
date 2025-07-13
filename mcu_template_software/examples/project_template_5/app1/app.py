@@ -1,12 +1,14 @@
 # from machine import WDT
 
 import os
+import asyncio
 from time import time, sleep
 
 from lib.uo import UO, UOBase
 from lib.config import MachineConfig
 from lib.wifi import WiFi
 from lib.hardware import Hardware
+from lib.ydev import YDev
 
 SHOW_MESSAGES_ON_STDOUT = True  # Turning this off will stop messages being sent on the serial port and will reduce CPU usage.
 WDT_TIMEOUT_MSECS = 8300        # Note that 8388 is the max WD timeout value on pico W hardware.
@@ -47,7 +49,15 @@ class ThisMachineConfig(MachineConfig):
     # MachineConfig.WIFI_KEY will added automatically so we only need
     # to define keys that are specific to this machine type here.
 
-    DEFAULT_CONFIG = {}
+    DEFAULT_CONFIG = {YDev.ACTIVE: True,
+                      YDev.AYT_TCP_PORT_KEY: 2934,               # The UDP port we expect to receive an AYT UDP broadcast message
+                      YDev.OS_KEY: "MicroPython",
+                      YDev.UNIT_NAME_KEY: "DEV_NAME",            # This can be used to identify device, probably user configurable.
+                      YDev.PRODUCT_ID_KEY: "PRODUCT_ID",         # This is fixed for the product, probably during MFG.
+                      YDev.DEVICE_TYPE_KEY: "DEV_TYPE",          # This is fixed for the product, probably during MFG.
+                      YDev.SERVICE_LIST_KEY: "web:80",           # A service name followed by the TCPIP port number this device presents the service on.
+                      YDev.GROUP_NAME_KEY: ""                    # Used put devices in a group for mild isolation purposes.
+                      }
 
     def __init__(self):
         super().__init__(ThisMachineConfig.DEFAULT_CONFIG)
@@ -96,7 +106,6 @@ class ThisMachine(BaseMachine):
 
     # This value must be less than the WDT_TIMEOUT_MSECS if the WDT is enabled.
     SERVICE_LOOP_MILLISECONDS = 200
-
     # The MAX time to wait for an STA to register.
     # After this time has elapsed the unit will either reboot
     # or if the hardware has the capability, power cycle itself.
@@ -105,7 +114,7 @@ class ThisMachine(BaseMachine):
     # A button pulls this GPIO pin low to reset the WiFi parameters.
     # The PC or android app should be used to setup the WiFi.
     # Typically GPIO 0 on an esp32 MCU.
-    # Typically GPIO 0 on an esp32-c3 MCU.
+    # Typically GPIO 9 on an esp32-c3 MCU.
     # Typically GPIO 14 on a RPi pico W MCU.
     WIFI_SETUP_BUTTON_PIN = 9
 
@@ -118,6 +127,7 @@ class ThisMachine(BaseMachine):
 
     def __init__(self, uo):
         super().__init__(uo)
+        self._startTime = time()
 
         # Initialise this machine
         self._init()
@@ -131,25 +141,40 @@ class ThisMachine(BaseMachine):
         # The WDT will then trigger a reboot.
     #        self._wdt = WDT(timeout=WDT_TIMEOUT_MSECS)
 
+    async def _updateTemp(self, paramDict):
+        """@brief Example code to update the temperature and humidity.
+                  In reality you are likely to read values from sensor/s. """
+        from math import floor
+        from random import random
+        #This task runs while the webserver is running.
+        while True:
+            # Move temp and humidity by small amounts so user can see
+            # values changing
+            temp = paramDict['temperature']
+            value = floor(float(temp)) + random()
+            paramDict['temperature'] = f"{value:.3f}"
+
+            humidity = paramDict['humidity']
+            value = floor(float(humidity)) + random()
+            paramDict['humidity'] = f"{value:.3f}"
+
+            await asyncio.sleep(1)
+
     def start(self):
         self.show_ram_info()
 
         # Connect this machine to a WiFi network.
         self._sta_connect_wifi()
 
-        while True:
-            start_loop_time = time()
-            self.show_ram_info()
+        # Task that will return JSON messages to the YDev server.
+        ydev = YDev(self._machine_config)
+        asyncio.create_task(ydev.listen())
 
-            if self._wifi.is_factory_reset_required():
-                self.set_factory_defaults()
-
-            # Calc how long we need to delay to maintain the service loop time
-            elapsed_seconds = time() - start_loop_time
-            loop_seconds_left = (ThisMachine.SERVICE_LOOP_MILLISECONDS/1000) - elapsed_seconds
-            if loop_seconds_left > 0:
-                self.pat_wdt()
-                sleep(loop_seconds_left)
-
-            else:
-                self.debug(f"Run out of service loop time by {loop_seconds_left} seconds.")
+        from lib.webserver import WebServer
+        web_server = WebServer(self._machine_config,
+                               self._startTime,
+                               uo=self._uo)
+        paramDict = {'temperature': 24.5, 'humidity': 60}
+        asyncio.create_task(self._updateTemp(paramDict))
+        web_server.setParamDict(paramDict)
+        web_server.run()

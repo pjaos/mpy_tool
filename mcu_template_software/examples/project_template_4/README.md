@@ -1,11 +1,9 @@
-# Example Project 4
+# Example Project 3
 
 Template project
 
 - With WiFi that can be setup via bluetooth
 - Start the microdot webserver.
-- A YDev broadcast message listener. This listens for YDev are you
-  there (AYT) messages and responds with JSON stats data.
 
 Add project code to app1/app.py file ThisMachine.start() method.
 
@@ -36,56 +34,3 @@ Hello from Microdot!
 
 Click to shutdown the server
 '''
-
-If the mpy_tool_gui SCAN tab is used to send YDEV broadcast messages when a device is running this example code it will respond with JSON messages as shown below in the messages window.
-
-```
-INFO:  Sending AYT messages every second.
-INFO:  Listening on UDP port 2934
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  Scan complete.
-```

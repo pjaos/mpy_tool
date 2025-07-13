@@ -1,23 +1,16 @@
-# Example Project 2
+# Example Project 1
 
-Project template with WiFi that can be setup via bluetooth.
+Project template with no WiFi or bluetooth setup included.
 
 Add project code to app1/app.py file ThisMachine.start() method.
 
-Once loaded the WIFI tab in mpy_tool_gui can be used to setup the WiFi.
-The message log from mpy_tool_gui when setting up the WiFi over bluetooth is shown below
+When started it shows memory usage on the serial port ass shown below.
 
 ```
-INFO:  Scanning for YDev devices via bluetooth...
-INFO:  Detected YDev unit (address = 28:37:2F:54:28:B6).
-INFO:  YDev unit is now performing a WiFi network scan...
-INFO:  WiFi Network                             RSSI (dBm)
-INFO:  airstorm11-Guest                         -85
-INFO:  airstorm11                               -86
-INFO:  Setting up YDev WiFi...
-INFO:  Waiting for YDev device to restart...
-INFO:  Waiting for YDev device WiFi to be served an IP address by the DHCP server...
-INFO:  YDev device IP address = X.X.X.X
-INFO:  Turning off bluetooth interface on YDev device.
-INFO:  Device WiFi setup complete.
+INFO:  Running app1
+INFO:  Total RAM (bytes) 178688, Free 158288, Used 20400, uptime 0
+INFO:  /dev/ttyACM0: INFO:  Total RAM (bytes) 178688, Free 165536, Used 13152, uptime 5
+INFO:  /dev/ttyACM0: INFO:  Total RAM (bytes) 178688, Free 165520, Used 13168, uptime 10
+INFO:  /dev/ttyACM0: INFO:  Total RAM (bytes) 178688, Free 165520, Used 13168, uptime 15
+INFO:  /dev/ttyACM0: INFO:  Total RAM (bytes) 178688, Free 165520, Used 13168, uptime 20
 ```
