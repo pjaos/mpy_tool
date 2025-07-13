@@ -19,6 +19,15 @@ class MCUBase(object):
         return any(platform.win32_ver())
 
     @staticmethod
+    def IsMacOSPlatform():
+        """@return True if running on a MacOS machine."""
+        macos = False
+        _platform = platform.system()
+        if _platform == 'Darwin':
+            macos = True
+        return macos
+
+    @staticmethod
     def GetAssetsFolder():
         """@return The assets folder."""
         # Get currently executing file
@@ -149,7 +158,7 @@ class MCUBase(object):
         if self._uio:
             self._uio.debug(msg)
 
-    def waitForFirstAvailableSerialPort(self, timeoutSeconds=60):
+    def waitForFirstAvailableSerialPort(self, timeoutSeconds=3):
         """@brief Wait for a serial port to appear on this machine.
            @return The device name of the first available serial port."""
         timeoutS = time()+timeoutSeconds
@@ -158,7 +167,7 @@ class MCUBase(object):
             if len(portInfoList) > 0:
                 break
             if time() > timeoutS:
-                raise Exception("Timeout waiting for a serial port to appear on this machine.")
+                raise Exception(f"{timeoutSeconds} second timeout waiting for a serial port to appear on this machine.")
             # Don't spinlock if no serial port is available
             sleep(0.25)
 
