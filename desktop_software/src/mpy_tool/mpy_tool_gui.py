@@ -6,10 +6,10 @@ import threading
 import serial
 import requests
 import datetime
-import platform
 
 from   time import time, sleep
 from queue import Queue
+from p3lib.launcher import Launcher
 
 from   lib.mcu_loader import LoaderBase, USBLoader, UpgradeManager, YDevScanner, MCUBase
 from   lib.bluetooth import YDevBlueTooth
@@ -63,23 +63,18 @@ class GUIServer(TabbedNiceGui):
     @staticmethod
     def GetCmdOpts():
         """@brief Get a reference to the command line options.
-        @return The options instance."""
+        @return A tuple containing
+                0 - The options instance.
+                1 - A Launcher instance."""
         parser = argparse.ArgumentParser(description="A tool to manage MCU devices using a GUI interface.",
                                         formatter_class=argparse.RawDescriptionHelpFormatter)
         parser.add_argument("--address",  help=f"Address that the GUI server is bound to (default={GUIServer.DEFAULT_SERVER_ADDRESS}).", default=GUIServer.DEFAULT_SERVER_ADDRESS)
         parser.add_argument("-p", "--port",     type=int, help=f"The TCP server port to which the GUI server is bound to (default={GUIServer.DEFAULT_SERVER_PORT}).", default=GUIServer.DEFAULT_SERVER_PORT)
         parser.add_argument("-d", "--debug",    action='store_true', help="Enable debugging.")
-
-        if platform.system() == 'Linux':
-            parser.add_argument("-a", "--add_gnome_desktop_launcher",  action='store_true', help="Add a Linux gnome desktop launcher.")
-            parser.add_argument("-r", "--remove_gnome_desktop_launcher",  action='store_true', help="Remove a Linux gnome desktop launcher.")
-
-        if platform.system() == 'Windows':
-            parser.add_argument("-a", "--add_startup_icon",  action='store_true', help="Add a startup icon to the Windows start button.")
-            parser.add_argument("-r", "--remove_startup_icon",  action='store_true', help="Remove a startup icon from the Windows start button.")
-
+        launcher = Launcher("icon.png", app_name="MPY_Tool")
+        launcher.addLauncherArgs(parser)
         options = parser.parse_args()
-        return options
+        return (options, launcher)
 
     def __init__(self, uio, options):
         """@brief Constructor
@@ -137,7 +132,7 @@ class GUIServer(TabbedNiceGui):
         markDownText = GUIServer.DESCRIP_STYLE_1+"""Install software on an MCU via a USB connection."""
         ui.markdown(markDownText)
 
-        self._installPicoDialog = YesNoDialog("Hold the button down on the RPi Pico W and then power it up. Then select the OK button below.",
+        self._installPicoDialog = YesNoDialog("Power down the  RPi Pico W, hold it's button down and then power it back up. Then select the OK button below.",
                                               self._startInstallThread,
                                               successButtonText = "OK",
                                               failureButtonText = "Cancel")
@@ -175,10 +170,8 @@ class GUIServer(TabbedNiceGui):
             self._loadAppInput.tooltip("Turn this on if you want to load the App onto the MCU flash memory")
 
             self._loadMpyInput = ui.switch("Load *.mpy files to MCU flash", value=True, on_change=self._updateAppField).style('width: 200px;')
-            # Don't allow user to load .py files because they use too much RAM.
-            self._loadMpyInput.disable()
             self._loadMpyInput.value = True
-            self._loadMpyInput.tooltip("Load *.mpy files rather than *.py files as the use less memory (flash and RAM). Change disabled as *.py files are too large.")
+            self._loadMpyInput.tooltip("Load *.mpy files rather than *.py files as they use less memory (flash and RAM).")
 
         with ui.row():
             self._app_main_py_input = ui.input(label='MCU micropython main.py').style('width: 800px;')
@@ -263,7 +256,7 @@ class GUIServer(TabbedNiceGui):
         """@brief Select the MCU main.py micropython file."""
         selected_path = self._get_currently_selected_path()
         result = await local_file_picker(selected_path)
-        if len(result) > 0:
+        if result:
             selected_file = result[0]
             if selected_file.endswith('main.py'):
                 self._app_main_py_input.value = selected_file
@@ -304,21 +297,23 @@ class GUIServer(TabbedNiceGui):
            @param event The button event."""
         self._clearMessages()
         mcuType = self._mcuTypeSelect.value
-        serialPort = self._serialPortSelect1.value
         if mcuType:
+            # For ESP32's you must erase the flash before loading it
+            if mcuType in LoaderBase.VALID_ESP32_TYPES and self._loadMicroPythonInput.value:
+                self._eraseMCUFlashInput.value = True
 
+            # If you erase the flash and want to load a MicroPython app you must load MicroPython
+            if self._eraseMCUFlashInput.value and not self._loadMicroPythonInput.value and self._loadAppInput.value:
+                self._loadMicroPythonInput.value = True
+
+            # In this case we expect MicroPython to have been loaded to the MCU previously.
             if not self._eraseMCUFlashInput.value and not self._loadMicroPythonInput.value:
                 self._startInstallThread()
 
             else:
 
                 if LoaderBase.IsPicoW(mcuType):
-                    # The RPi Pico is mounted as a drive (the button has been pressed previously)
-                    # so we can load it now without prompting the user to press the button.
-                    if serialPort is None:
-                        self._startInstallThread()
-                    else:
-                        self._installPicoDialog.show()
+                    self._installPicoDialog.show()
 
                 elif LoaderBase.IsEsp32(mcuType):
                     self._installEsp32Dialog.show()
@@ -329,27 +324,62 @@ class GUIServer(TabbedNiceGui):
     def _startInstallThread(self):
         """@brief Start the SW installation thread."""
         self._initTask()
-        t = threading.Thread( target=self._installSW)
-        t.daemon = True
-        t.start()
+        self._saveConfig()
+        mcuType = self._mcuTypeSelect.value
+        startMessage="MCU: "
+        duration = 0
+        try:
+            if LoaderBase.IsPicoW(mcuType):
+                self.info(f"Checking for a mounted {mcuType} drive...")
+                # This needs updating to handle each combination of load options
+                if self._eraseMCUFlashInput.value:
+                    duration = 13
+                if self._loadMicroPythonInput.value:
+                    duration+=28
+
+                if self._loadAppInput.value:
+                    duration+=60
+
+                self._startProgress(durationSeconds=duration, startMessage=startMessage)
+            else:
+                self._checkSerialPortAvailable(self._serialPortSelect1.value)
+                if self._eraseMCUFlashInput.value:
+                    duration = 15
+
+                if self._loadMicroPythonInput.value:
+                    duration+=122
+
+                if self._loadAppInput.value:
+                    duration+=58
+
+                self._startProgress(durationSeconds=duration, startMessage=startMessage)
+
+            t = threading.Thread( target=self._installSW)
+            t.daemon = True
+            t.start()
+
+        except Exception as ex:
+            self.reportException(ex)
+            self._sendEnableAllButtons(True)
 
     def _checkSerialPortAvailable(self, serialPortDev):
         """@brief Check that the selected serial port is present and available for use.
                   An Exception is thrown if not available."""
+        if serialPortDev is None or len(serialPortDev) == 0:
+            raise Exception("No serial port selected. Connect MCU via a USB cable and select the 'UPDATE SERIAL PORT LIST' button.")
+
         portInfoList = MCUBase.GetSerialPortList()
-        available = False
+        found = False
         for portInfo in portInfoList:
             if portInfo.device == serialPortDev:
-                available = True
+                found = True
                 break
 
         # If the selected serial port is not available, report to user
-        if not available and len(portInfoList) > 0:
-            for portInfo in portInfoList:
-                self.info(f"Found {portInfo.device}")
-            raise Exception(f"{serialPortDev} is not available.")
+        if not found:
+            raise Exception(f"{serialPortDev} was not found.")
 
-        if available:
+        if found:
             try:
                 ser = serial.serial_for_url(serialPortDev, do_not_open=False, exclusive=True)
                 ser.close()
@@ -358,57 +388,22 @@ class GUIServer(TabbedNiceGui):
                 raise Exception(f"{serialPortDev} serial port is not available as it's in use.")
 
         else:
-            # If a RPi Pico W is connected and the user has pressed the button on the device before powering it up
-            # it will mount as a drive and no serial port will be detected.
-            # Therefore check to see if this is the case.
-            picoPathList = USBLoader.GetPicoPath(waitExists=False)
-            found = False
-            for picoPath in picoPathList:
-                if os.path.isdir(picoPath):
-                    found = True
-                    break
-
-            if not found:
-                raise Exception("No MCU serial port selected. Plug in MCU and select the 'UPDATE SERIAL PORT LIST' button.")
+            raise Exception(f"{serialPortDev} appears to be in use.")
 
     def _installSW(self):
         """@brief Called to do the work of wiping flash and installing MicroPython onto the MCU."""
         try:
             try:
-                self._checkSerialPortAvailable(self._serialPortSelect1.value)
-
-                duration = 0
-                startMessage = ""
                 mcuType = self._mcuTypeSelect.value
                 self.info(f"MCU: {mcuType}.")
-                if LoaderBase.IsPicoW(mcuType):
-                    self.info(f"Checking for a mounted {mcuType} drive...")
-                    startMessage="Detected MCU: "
-                    # This needs updating to handle each combination of load options
-                    if self._eraseMCUFlashInput.value:
-                        duration = 13
-                    if self._loadMicroPythonInput.value:
-                        duration+=28
-
-                    if self._loadAppInput.value:
-                        duration+=60
-
-                else:
-                    if self._eraseMCUFlashInput.value:
-                        duration = 9
-
-                    if self._loadMicroPythonInput.value:
-                        duration+=122
-
-                    if self._loadAppInput.value:
-                        duration+=58
-
-                self._startProgress(durationSeconds=duration, startMessage=startMessage)
+                # Wait for Pico path if we need it.
+                if LoaderBase.IsPicoW(mcuType) and (self._eraseMCUFlashInput.value or self._loadMicroPythonInput.value):
+                    USBLoader.WaitForPicoPath()
 
                 usbLoader = USBLoader(mcuType, uio=self)
                 usbLoader.setSerialPort(self._serialPortSelect1.value)
                 mcu_app_path = self._get_mcu_app_path()
-                # If we will lod the MCU app check it first so
+                # If we will load the MCU app check it first so
                 # as erase and load MicroPython can take some time.
                 if self._loadAppInput.value:
                     USBLoader.CheckPythonCode(mcu_app_path)
@@ -496,10 +491,8 @@ class GUIServer(TabbedNiceGui):
         with ui.row():
             self._deviceIPAddressInput1 = ui.input(label='Device address', on_change=self._deviceIPAddressInput1Change)
             self._upgradeMpyInput = ui.switch("Load *.mpy files to MCU flash", value=True, on_change=self._updateAppField).style('width: 200px;')
-            # Don't allow user to load .py files because they use too much RAM.
-            self._upgradeMpyInput.disable()
             self._upgradeMpyInput.value = True
-            self._upgradeMpyInput.tooltip("Load *.mpy files rather than *.py files as the use less memory (flash and RAM). Change disabled as *.py files are too large.")
+            self._upgradeMpyInput.tooltip("Load *.mpy files rather than *.py files as they use less memory (flash and RAM).")
 
         ipAddress = self._cfgMgr.getAttr(GUIServer.DEVICE_ADDRESS)
         if ipAddress:
@@ -521,7 +514,7 @@ class GUIServer(TabbedNiceGui):
            @param event The button event."""
         self._initTask()
         self._saveConfig()
-        self._startProgress(durationSeconds=45)
+        self._startProgress(durationSeconds=90)
         t = threading.Thread( target=self._appUpgrade)
         t.daemon = True
         t.start()
@@ -621,7 +614,6 @@ class GUIServer(TabbedNiceGui):
                 self.reportException(ex)
 
         finally:
-            # Need a way yo disable the close button here
             self._sendEnableAllButtons(True)
 
     def _initSerialTab(self):
@@ -1431,38 +1423,10 @@ def main():
     uio = UIO()
 
     try:
-        options = GUIServerEXT1.GetCmdOpts()
+        options, launcher = GUIServerEXT1.GetCmdOpts()
         uio.enableDebug(options.debug)
-        setup_launcher = False
-        if platform.system() == 'Linux':
-            from p3lib.gnome_desktop_app import GnomeDesktopApp
-            if options.add_gnome_desktop_launcher:
-                gda = GnomeDesktopApp('icon.png')
-                gda.create()
-                uio.info("Created gnome desktop application launcher")
-                setup_launcher = True
-
-            elif options.remove_gnome_desktop_launcher:
-                gda = GnomeDesktopApp('icon.png')
-                if gda.delete():
-                    uio.info("Deleted gnome desktop application launcher")
-                else:
-                    uio.info("No gnome desktop application launcher was found to delete.")
-                setup_launcher = True
-
-        elif platform.system() == 'Windows':
-            from p3lib.windows_app import WindowsApp
-            if options.add_startup_icon:
-                windowsApp = WindowsApp(uio=uio)
-                windowsApp.create("icon.ico")
-                setup_launcher = True
-
-            if options.remove_startup_icon:
-                windowsApp = WindowsApp(uio=uio)
-                windowsApp.delete()
-                setup_launcher = True
-
-        if not setup_launcher:
+        handled = launcher.handleLauncherArgs(options, uio=uio)
+        if not handled:
             guiServer = GUIServerEXT1(uio, options)
             guiServer.start()
 

@@ -25,6 +25,7 @@ from retry import retry
 from copy import copy
 from subprocess import check_call, PIPE, check_output
 from threading import Thread
+from random import random
 
 class LoaderBase(MCUBase):
 
@@ -106,11 +107,11 @@ class LoaderBase(MCUBase):
            @param ser n open serial port connected to an ESP32 device."""
         ser.dtr = False
         ser.rts = True
-        uio.info("Reset ESP32")
+        uio.info("Asserting esp32 hardware reset.")
         sleep(0.25)
         ser.dtr = True
         ser.rts = False
-        uio.info("Released ESP32 Reset")
+        uio.info("Released esp32 hardware reset.")
         # Allow a short time for the esp32 to come out of the reset state
         sleep(0.25)
 
@@ -173,7 +174,7 @@ class LoaderBase(MCUBase):
                                 totalBytes = values[0] * values[2]
                                 freeBytes = values[0] * values[3]
                             break
-        return (totalBytes, freeBytes)
+        return [totalBytes, freeBytes]
 
     @staticmethod
     def GetTempFolder():
@@ -266,13 +267,14 @@ class LoaderBase(MCUBase):
         """@brief Wait for a serial port to appear on this machine.
            @param baud The baud rate of the serial port in bps.
            @return A reference to the open serial port obj."""
+# PJA Check each MCU is ok with this
         # Set the CTRL sigs for the MCU
         if self._isPico():
             dtr=True
             rts=True
         else:
             dtr=True
-            rts=False
+            rts=True
         return self._openFirstSerialPort(baud=baud, dtr=dtr, rts=rts)
 
     def _deleteFiles(self, fileList, showMsg=True):
@@ -288,10 +290,7 @@ class LoaderBase(MCUBase):
         """@brief Get the RSHell command line.
            @param port The serial port to use.
            @param cmdFile The rshell command to execute."""
-        # Note, CTRL sigs must be set correctly for MCU
-        cmd = f'mpy_tool_rshell --rts 0 --dtr 1 --timing -p {port} --buffer-size 512 -f "{cmdFile}"'
-        if self._isPico():
-            cmd = f'mpy_tool_rshell --rts 1 --dtr 1 --timing -p {port} --buffer-size 512 -f "{cmdFile}"'
+        cmd = f'mpy_tool_rshell --rts 1 --dtr 1 --timing -p {port} --buffer-size 128 -f "{cmdFile}"'
         return cmd
 
     def _runRshellCmdFile(self, port, cmdFile, allowFailure=False):
@@ -322,9 +321,52 @@ class LoaderBase(MCUBase):
         fd.close()
         self._runRshellCmdFile(self._serialPort, MCULoader.RSHELL_CMD_LIST_FILE)
 
-    def _checkMicroPython(self, closeSerialPort=True, timeoutSeconds=30):
+    def _checkMCUCorrect(self, line, checkIDLine=False):
+        """@brief Check that the configured MCU is set correctly given the response to CTRL B @ REPL prompt or
+                  the response from a esptool check_id command.
+           @param line The line of text received in response to CTRL B on the serial port.
+           @param If True the line is an esptool check_id command response. The esptool check_id command
+                  returns different text to identify the device."""
+        correct = False
+        mcu = self._mcu
+        if mcu == LoaderBase.ESP32_MCU_TYPE:
+            if checkIDLine and "ESP32" in line:
+                    correct = True
+
+            elif "ESP32 " in line: # Space required to ensure it's not a later esp32 variant.
+                correct = True
+
+        elif mcu == LoaderBase.ESP32C3_MCU_TYPE:
+            if checkIDLine and "ESP32-C3" in line:
+                    correct = True
+
+            elif "ESP32C3" in line:
+                correct = True
+
+        elif mcu == LoaderBase.ESP32C6_MCU_TYPE:
+            if checkIDLine and "ESP32-C6" in line:
+                    correct = True
+            # At the current time esp32c6 MicroPython support is in progress.
+            # The current version of MicroPython reports ESP32 rather than ESP32C6.
+            elif "ESP32" in line or "ESP32C6" in line:
+                    correct = True
+
+        elif mcu == LoaderBase.RPI_PICOW_MCU_TYPE:
+            if "RP2040" in line:
+                correct = True
+
+        elif mcu == LoaderBase.RPI_PICO2W_MCU_TYPE:
+            if "RP2350" in line:
+                correct = True
+
+        if not correct:
+            raise Exception(f"Incorrect MCU type. A {self._mcu} MCU is not connected via a USB cable.")
+
+    def _checkMicroPython(self, closeSerialPort=True, timeoutSeconds=30, checkMCUCorrect=False):
         """@brief Check micropython is loaded onto the MCU connected vis USB.
            @param closeSerialPort If True then close the serial port on exit.
+           @param timeoutSeconds Seconds to wait before timeout.
+           @param checkMCUCorrect If True ensure the configured MCU type is correct.
            @return True on success."""
         success = False
         self.debug("_checkMicroPython(): START")
@@ -361,7 +403,9 @@ class LoaderBase(MCUBase):
                                 lines = _data.split("\r\n")
                                 if len(lines) > 0:
                                     line = lines[0]
-                                    self.info(f"MCU Device:  {line}")
+                                    self.info(line)
+                                    if checkMCUCorrect:
+                                        self._checkMCUCorrect(line)
                                     success = True
                                     break
 
@@ -380,32 +424,62 @@ class LoaderBase(MCUBase):
                 raise
 
         finally:
-            if closeSerialPort and self._ser:
-                self._ser.close()
-                self._ser = None
-                self.debug(f"{self._serialPort}: Closed serial port.")
+            if closeSerialPort:
+                self._closeSerialPort()
 
         self.debug("_checkMicroPython(): STOP")
         return success
 
-    def rebootUnit(self, esp32):
-        """@brief reboot a MCU device.
-           @param esp32 True if the MCU is any types of esp32"""
-        self.info("Rebooting the MCU")
+    def esp32HWReset(self, ser=None):
+        """@brief Perform a reset on an ESP32 device.
+           @param ser A ref to an open serial port. If None then the first available serial port is used.
+                  The ESP32 MCU reset is connected to the RTs control signal. We use this to assert the reset and release it."""
         try:
-            # Attempt to connect to the board under test python prompt
-            self._checkMicroPython(closeSerialPort=False)
-            # Send the python code to reboot the MCU
-            self._ser.write(b"import machine ; machine.reset()\r")
-            self.info("Rebooted the MCU")
-            # Short delay for reset command to be executed before closing the serial port.
-            sleep(.2)
+            if ser is None:
+                ser = self.openFirstSerialPort()
+            USBLoader.ResetESP32(self._uio, ser)
+            # Wait for MCU to come out of reset
+            sleep(1)
 
         finally:
-            if self._ser:
-                self._ser.close()
-                self._ser = None
-                self.info(f"Closed {self._serialPort}")
+            if ser:
+                ser.close()
+                ser = None
+
+    def _closeSerialPort(self):
+        """@brief Close the serial port if it's open."""
+        if self._ser:
+            self._ser.close()
+            self._ser = None
+            self.debug(f"{self._serialPort}: Closed.")
+
+    def rebootUnit(self, esp32HWReboot=False):
+        """@brief reboot a MCU device.
+           @param esp32HWReboot If True and the HW is a type of esp32 MCU then the HW reset pin is used to reset it."""
+        self.info(f"Rebooting the MCU ({self._mcu})")
+
+        self._closeSerialPort()
+
+        if esp32HWReboot and self._mcu in USBLoader.VALID_ESP32_TYPES:
+            self.esp32HWReset()
+
+        else:
+            try:
+                # Attempt to connect to the board under test python prompt
+                self._checkMicroPython(closeSerialPort=False)
+                try:
+                    # Send the python code to reboot the MCU, three times.
+                    count = 0
+                    while count < 3:
+                        self._ser.write(b"import machine ; machine.reset()\r")
+                        sleep(0.1)
+                        count += 1
+
+                except serial.SerialException:
+                    pass
+            finally:
+                self._closeSerialPort()
+
         # We need a short delay or subsequent serial port use throws errors
         # possibly because the serial port disappears and then reappears as observed on Linux.
         # 1 second fails sometimes, 1.5 seconds seems ok but this may be machine dependant !!!
@@ -488,7 +562,7 @@ class LoaderBase(MCUBase):
             # so we use the command line ping instead.
             try:
                 startT = time()
-                cmd = f"/usr/bin/ping -W 1 -c 1 {address} 2>&1 > /dev/null"
+                cmd = f"ping -W 1 -c 1 {address} 2>&1 > /dev/null"
                 check_call(cmd, shell=True)
                 pingSec = time()-startT
             except:
@@ -621,46 +695,64 @@ class USBLoader(LoaderBase):
         return fileList
 
     @staticmethod
-    def GetPicoPath(waitExists=True):
-        """@brief Get the path of the RPi Pico W device.
-           @param waitExists If True wait for the Pico path to become present.
-           @return If waitExists == True
-                    The path on this machine where RPi Pico W images can be copied to load them into flash or None if no such path is found.
-                   If waitExists == False
-                    A list of RPi Pico W paths """
-        picoPath = None
+    def GetAllPicoPaths():
+        """@brief Get the path of the RPi Pico W device when mounted (powered up with button down).
+           @return A list of all the valid paths any type of RPi Pico May be mounted at."""
         srcPathList = []
         windowsPlatform = USBLoader.IsWindowsPlatform()
         if windowsPlatform:
-            srcPathList = ['%s:' % d for d in string.ascii_uppercase if os.path.exists('%s:' % d)]
+            driveList = ['%s:' % d for d in string.ascii_uppercase if os.path.exists('%s:' % d)]
+            srcPathList = [s for s in driveList if not s.startswith("C:")]
+
+        elif USBLoader.IsMacOSPlatform():
+            srcPathList = ["/Volumes/RPI-RP2","/Volumes/RP2350"]
+
         else:
             srcPathList = [f"/media/{getpass.getuser()}/RPI-RP2",f"/media/{getpass.getuser()}/RP2350"]
 
-        if waitExists:
-
-            # Wait for the drive mounted from the RPi over the serial interface.
-            for _picoPath in srcPathList:
-                # Skip the main HDD/SSD on windows platform
-                if windowsPlatform and _picoPath.startswith("C:"):
-                    continue
-                if os.path.isdir(_picoPath):
-                    fileList = os.listdir(_picoPath)
-                    fileCount = 0
-                    # We make a check for the required files in the root of the disk to identify the RPi Pico mount point
-                    for rootFile in fileList:
-                        if rootFile.lower() in USBLoader.RPI_BOOT_BTN_DWN_FILE_LIST:
-                            fileCount+=1
-                    # If the expected files are in the root of the drive assume it's a RPi Pico in the correct mode.
-                    if fileCount == len(USBLoader.RPI_BOOT_BTN_DWN_FILE_LIST):
-                        picoPath = _picoPath
-
-            # If we've found the path then wait for a short while as just after mounting the FS may be Read only
-            if picoPath:
-                sleep(0.5)
-
-            return picoPath
+        srcPathList = [s for s in srcPathList if not s.startswith("C:")]
 
         return srcPathList
+
+    @staticmethod
+    def WaitForPicoPath(timeout=30):
+        """@brief Wait for the path to exist when a RPi Pico W flash is mounted.
+           @return The pico path found or an Exception is thrown if a timeout occurs."""
+        picoPathFound = None
+        picoPaths = USBLoader.GetAllPicoPaths()
+        found = False
+        timeoutTime = time()+timeout
+        while not found:
+            # Get a list of files in this location.
+            try:
+                for picoPath in picoPaths:
+                    # If this folder exists
+                    if os.path.isdir(picoPath):
+                        _fileList = os.listdir(picoPath)
+                        fileList = [s.lower() for s in _fileList]
+                        foundCount = 0
+                        for expectedFile in USBLoader.RPI_BOOT_BTN_DWN_FILE_LIST:
+                            if expectedFile in fileList:
+                                foundCount += 1
+                            else:
+                                break
+
+                        if foundCount == len(USBLoader.RPI_BOOT_BTN_DWN_FILE_LIST):
+                            found = 1
+                            picoPathFound = picoPath
+
+                    if not found and time() > timeoutTime:
+                        raise Exception(f"{timeout} timeout waiting for {" or ".join(picoPaths)} path to be found.")
+
+            except PermissionError:
+                # As the drive mounts we may get this error for a short while
+                pass
+
+            if not picoPathFound:
+                # If we have not fund the path don't spinlock.
+                sleep(0.25)
+
+        return picoPathFound
 
     def __init__(self, mcuType, uio=None):
         """@brief Constructor.
@@ -767,7 +859,7 @@ class USBLoader(LoaderBase):
         timeoutT = time()+self._picoPathTimeout
         # Wait for the drive mounted from the RPi over the serial interface.
         while not picoPath:
-            picoPath = USBLoader.GetPicoPath()
+            picoPath = USBLoader.WaitForPicoPath()
             if picoPath:
                 break
             if time() >= timeoutT:
@@ -818,6 +910,14 @@ class USBLoader(LoaderBase):
             self.info("You may now release the button.")
             self.info("")
 
+        self.info(f"Waiting for {picoPath} to mount...")
+        while True:
+            if os.path.isdir(picoPath):
+                self.info(f'{picoPath} is mounted.')
+                break
+        # We wait a short while for the mount to disappear
+        sleep(0.5)
+
         self.info(f"Copying {sourcePath} to {destinationPath}")
         shutil.copy(sourcePath, destinationPath)
 
@@ -825,8 +925,13 @@ class USBLoader(LoaderBase):
 
         if fileType == USBLoader.ERASE_PCIO_FLASH:
             self.info("Erased the RPi Pico flash.")
+            while True:
+                if not os.path.isdir(picoPath):
+                    self.info(f'{self._mcuType} restarted after erasing the flash memory.')
+                    break
             # We wait a short while for the mount to disappear
             sleep(0.5)
+
         else:
             self.info("Copied the MicroPython image file to the RPi Pico flash.")
 
@@ -835,7 +940,7 @@ class USBLoader(LoaderBase):
            @param args The argument list for the esptool command."""
         error = True
         try:
-            self.debug(f"EXECUTING: {str(args)} ^^^^^^^^^^^^^^^^^^^^")
+            self.debug(f"EXECUTING: {str(args)}")
             # Save original argv to restore later
             original_argv = sys.argv
             sys.argv = args
@@ -887,6 +992,7 @@ class USBLoader(LoaderBase):
         esp_type = None
         for line in lines:
             if line.startswith(USBLoader.ESPTOOL_DETECTING_CHIP_TYPE):
+                self.info(line)
                 esp_type = line[len(USBLoader.ESPTOOL_DETECTING_CHIP_TYPE):]
                 esp_type = esp_type.rstrip("\r\n")
                 esp_type = esp_type.strip(" \t")
@@ -897,6 +1003,9 @@ class USBLoader(LoaderBase):
 
         if esp_type is None:
             raise Exception("Failed to determine ESP32 type.")
+
+        # Check the correct type of MCU is connected.
+        self._checkMCUCorrect(line, checkIDLine=True)
 
         return esp_type
 
@@ -975,6 +1084,8 @@ class USBLoader(LoaderBase):
            @return A tuple containing
                    0 = Total Space in bytes.
                    1 = Free space in bytes."""
+        if appPath is None or len(appPath) == 0:
+            raise Exception("No main.py has been set. This is needed to load the program onto the MCU.")
         # This will clean all the files including all config from the MCU flash memory
         mcuLoader = MCULoader(self._uio, self._mcuType, appPath)
         vfsStats = mcuLoader.load(loadMPYFiles=loadMPYFiles)
@@ -1010,10 +1121,8 @@ class USBLoader(LoaderBase):
                     sleep(0.1)
 
             finally:
-                if self._ser:
-                    self._ser.close()
-                    self._ser = None
-                    self.info(f"Closed {self._serialPort}")
+                self._closeSerialPort()
+
 
     def setupWiFi(self, ssid, password):
         """@brief Update the WiFi config on the MCU device to ensure it will connect to the wiFi
@@ -1043,9 +1152,7 @@ class USBLoader(LoaderBase):
             LoaderBase.SaveDictToJSONFile(thisMachineDict, localMachineCfgFile, uio=self._uio)
 
         finally:
-            if self._ser:
-                self._ser.close()
-                self._ser = None
+            self._closeSerialPort()
         localMachineCfgFile = USBLoader.GetRShellPath(localMachineCfgFile)
         # Copy the machine config file back to the MCU flash
         self._runRShell((f'cp "{localMachineCfgFile}" /pyboard/',) )
@@ -1101,9 +1208,7 @@ class USBLoader(LoaderBase):
                 self.debug(f"SerialException: {traceback.format_exc()}")
 
         finally:
-            if self._ser:
-                self._ser.close()
-                self._ser = None
+            self._closeSerialPort()
 
         return ipAddress
 
@@ -1113,7 +1218,7 @@ class MCULoader(LoaderBase):
               to .mpy files and loading them onto the MCU."""
     DEL_ALL_FILES_CMD_LIST = ["rm -r /pyboard/*"]
     MCU_MP_CACHE_FOLDER = "mcu_app.cache"
-    RSHELL_CMD_LIST_FILE        = os.path.join( MCUBase.GetTempFolder(), "cmd_list.cmd")
+    RSHELL_CMD_LIST_FILE = os.path.join( MCUBase.GetTempFolder(), f"cmd_list_{str( int(random()*1E6) )}.cmd")
 
     @staticmethod
     def GetAppRootPath(appRootFolder):
@@ -1230,6 +1335,7 @@ class MCULoader(LoaderBase):
             if cmdOutput.find(_file) == -1:
                 raise Exception(f"Failed to load the {_file} file onto the MCU device.")
         self.info(f"Loaded all {len(fileList)} python files.")
+        return totalSizeAllFiles
 
     def _deleteAllMCUFiles(self, port):
         """@brief Delete all files from the MCU device.
@@ -1244,40 +1350,6 @@ class MCULoader(LoaderBase):
         self._runRshellCmdFile(port, MCULoader.RSHELL_CMD_LIST_FILE, allowFailure=True)
         self.info("Deleted all files from MCU flash.")
 
-    def getAppFileList(self, loadMPYFiles=True):
-        """@brief Get the list of files to load for the given app root path.
-           @param loadMPYFiles If True (default) we compile the .py files to .mpy files and
-                               load these. This saves significant MCU flash memory space.
-                               If False then the python files are loaded."""
-
-        if loadMPYFiles:
-            fileList = []
-            LoaderBase.GetFiles(fileList, self._appRootFolder)
-            pyFileList = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION)
-            mainPy = os.path.join(self._appRootFolder, MCULoader.MAIN_PYTHON_FILE)
-            # Ensure we have the main python file
-            if mainPy not in pyFileList:
-                raise Exception(f"{MCULoader.MAIN_PYTHON_FILE} file not found in {self._appRootFolder}")
-            mpyFileList = self._convertToMPY(pyFileList)
-            # Do Not load the .py files onto the MCU only the .mpy and other files
-            filesToLoad = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION, include=False)
-            filesToLoad = filesToLoad + mpyFileList
-            # Ensure we load the main python file
-            filesToLoad.insert(0, mainPy)
-            # Remove the main.mpy file from the list
-            mainMpyFile = os.path.join(self._appRootFolder, MCULoader.MAIN_MICROPYTHON_FILE)
-            if mainMpyFile in filesToLoad:
-                index = filesToLoad.index(mainMpyFile)
-                if index >= 0:
-                    del filesToLoad[index]
-        else:
-            # Ensure we don't have any mpy files at or below the app root folder.
-            self.deleteLocalMPYFiles()
-            filesToLoad = []
-            # Load all files in and under the app root folder to the MCU
-            LoaderBase.GetFiles(filesToLoad, self._appRootFolder)
-        return filesToLoad
-
     def load(self, loadMPYFiles=True):
         """@brief Load the python code onto the micro controller device.
            @param loadMPYFiles If True (default) we compile the .py files to .mpy files and
@@ -1287,28 +1359,37 @@ class MCULoader(LoaderBase):
                    0 = Total Space in bytes.
                    1 = Free space in bytes."""
         self.checkMCUCode()
-        esp32 = self._mcu in USBLoader.VALID_ESP32_TYPES
-        self._checkMicroPython()
+
+        # An esp32 may be locked up waiting for a bootloader due to previous control signal states or button presses
+        # so we reset it at the start of the load process to attempt to ensure it's running normally.
+        if self._mcu in USBLoader.VALID_ESP32_TYPES:
+            self.esp32HWReset()
+
+        self._checkMicroPython(checkMCUCorrect=True)
         self.deleteLocalMPYFiles()
         # Delete all files from the MCU device
         self._deleteAllMCUFiles(self._serialPort)
+
         # We now need to reboot the device in order to ensure the WDT is disabled
         # as there is no way to disable the WDT once enabled and the WDT runs
-        # on a MCU device.
-        self.rebootUnit(esp32)
+        # on a MCU device. We don't want the WDT firing part way through the installation
+        # process.
+        self.rebootUnit()
+
         # Regain the python prompt from the MCU unit.
-        self._checkMicroPython()
-        filesToLoad = self.getAppFileList(loadMPYFiles)
-        self._loadFiles(filesToLoad, self._serialPort)
-        self.deleteLocalMPYFiles()
         self._checkMicroPython(closeSerialPort=False)
+        self.info("Reading MCU flash stats")
         fsStats = LoaderBase.REPLGetFlashStats(self._ser)
-        if self._ser:
-           self._ser.close()
-           self._ser = None
-           self.info(f"Closed {self._serialPort}")
-        # Reboot so that the MCU attempts to run the code just loaded.
-        self.rebootUnit(esp32)
+        self.info("Read MCU flash stats")
+        self._closeSerialPort()
+
+        filesToLoad = self.getAppFileList(loadMPYFiles)
+        sizeOfAllLoadedFiles = self._loadFiles(filesToLoad, self._serialPort)
+        self.deleteLocalMPYFiles()
+        # Reduce the free space by the total size of the files loaded.
+        freeSpace = fsStats[1]
+        fsStats[1] = freeSpace - sizeOfAllLoadedFiles
+        self.rebootUnit(esp32HWReboot=True)
         return fsStats
 
 class UpgradeManager(LoaderBase):
@@ -1338,18 +1419,15 @@ class UpgradeManager(LoaderBase):
         self._appRootFolder      = None
         self._orgActiveAppFolder = None
 
-    def _getSize(self, folder, byteCount=0):
+    def _getSize(self, loadMpyFiles, byteCount=0):
         """@brief Get the size of all the files in and below the folder.
+           @param loadMpyFiles True if loading .mpy rather than .py files to the MCU.
            @param byteCount The running byte count."""
-        entries = os.listdir(folder)
+        entries = self.getAppFileList(loadMpyFiles)
         for entry in entries:
-            absEntry = os.path.join(folder, entry)
-            if os.path.isfile(absEntry):
-                fileSize = os.path.getsize(absEntry)
+            if os.path.isfile(entry):
+                fileSize = os.path.getsize(entry)
                 byteCount += fileSize
-
-            elif os.path.isdir(absEntry):
-                byteCount = self._getSize(absEntry, byteCount=byteCount)
 
         return byteCount
 
@@ -1523,7 +1601,7 @@ class UpgradeManager(LoaderBase):
                     fSize = self.sendFile(address, localFile, destPath)
                     totalBytes += fSize
 
-            self.info(f"Total size of all files to be loaded to the MCU: {totalBytes} bytes.")
+            self.info(f"Total size of all files loaded to the MCU: {totalBytes} bytes.")
             self._checkDiskSpace(address, totalBytes)
         else:
             raise Exception("Failed to determine the devices inactive app folder.")
@@ -1625,7 +1703,7 @@ class UpgradeManager(LoaderBase):
         startTime = time()
         self._appRootFolder = MCULoader.GetAppRootPath(appRootPath)
         self.checkMCUCode()
-        appSize = self._getSize(self._appRootFolder)
+        appSize = self._getSize(self._appRootFolder, loadMpyFiles)
         self.info(f"Performing an OTA upgrade of {address}")
         # We need to erase any data in the inactive partition to see if we have space for the new app
         self._runCommand(address, UpgradeManager.ERASE_OFFLINE_APP)
