@@ -402,17 +402,25 @@ class WebServer():
         app = Microdot()
 
         @app.post('/upload')
-        async def upload(request):
-            path = request.headers.get('file', None)
-            if path:
-                # Ensure parent directory exists
-                dir_name = '/'.join(path.split('/')[:-1])
-                if dir_name and dir_name not in os.listdir():
-                    self._mkdirs(dir_name)
+        def upload(req):
+            filename = req.headers.get('X-File-Name')
+            is_first_chunk = req.headers.get('X-Start', '0') == '1'
+            chunk = req.body
+            chunk_size = len(chunk)
 
-                # Write the uploaded binary data
-                with open(path, 'wb') as f:
-                    f.write(request.body)
+            # Ensure containing directory exists
+            dir_name = '/'.join(filename.split('/')[:-1])
+            if dir_name and dir_name not in os.listdir():
+                self._mkdirs(dir_name)
+
+            mode = 'wb'  # truncate file if it exists
+            if not is_first_chunk:
+                mode = 'ab'
+
+            # Write the file containing the received data
+            with open(filename, mode) as f:
+                if chunk_size > 0:
+                    f.write(chunk)
 
             return get_json(WebServer.GetOKDict())
 

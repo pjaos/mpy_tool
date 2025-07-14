@@ -171,7 +171,7 @@ class GUIServer(TabbedNiceGui):
 
             self._loadMpyInput = ui.switch("Load *.mpy files to MCU flash", value=True, on_change=self._updateAppField).style('width: 200px;')
             self._loadMpyInput.value = True
-            self._loadMpyInput.tooltip("Load *.mpy files rather than *.py files as they use less memory (flash and RAM).")
+            self._loadMpyInput.tooltip("Load *.mpy files rather than *.py files as they use less flash memory.")
 
         with ui.row():
             self._app_main_py_input = ui.input(label='MCU micropython main.py').style('width: 800px;')
@@ -492,7 +492,7 @@ class GUIServer(TabbedNiceGui):
             self._deviceIPAddressInput1 = ui.input(label='Device address', on_change=self._deviceIPAddressInput1Change)
             self._upgradeMpyInput = ui.switch("Load *.mpy files to MCU flash", value=True, on_change=self._updateAppField).style('width: 200px;')
             self._upgradeMpyInput.value = True
-            self._upgradeMpyInput.tooltip("Load *.mpy files rather than *.py files as they use less memory (flash and RAM).")
+            self._upgradeMpyInput.tooltip("Load *.mpy files rather than *.py files as they use less flash memory.")
 
         ipAddress = self._cfgMgr.getAttr(GUIServer.DEVICE_ADDRESS)
         if ipAddress:

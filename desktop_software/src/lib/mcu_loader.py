@@ -1410,6 +1410,7 @@ class UpgradeManager(LoaderBase):
     ACTIVE_APP_FOLDER_KEY           = "ACTIVE_APP_FOLDER"
 
     SHA256                          = "SHA256"
+    MAX_CHUNK_SIZE                  = 4096 # This is limited by the ram available while transferring files.
 
     def __init__(self, mcu, uio=None):
         """@brief Constructor.
@@ -1501,17 +1502,19 @@ class UpgradeManager(LoaderBase):
         """@Brief Get the sha256 hash of a file on the MCU.
            @param address The address of the MCU to upgrade.
            @param _file The file ni the MCU file system.
-           @return The SHA256 string."""
+           @return The SHA256 string or None ."""
         url = 'http://{}:{}{}?file={}'.format(address, UpgradeManager.DEVICE_REST_INTERFACE_TCP_PORT, UpgradeManager.GET_SHA256, _file)
         self.debug(f"CMD: {url}")
         r = requests.get(url)
         obj = r.json()
         self.debug(f"CMD RESPONSE: { str(obj) }")
+        sha256 = None
         if isinstance(obj, dict):
             if UpgradeManager.SHA256 in obj:
                 sha256 = obj[UpgradeManager.SHA256]
         return sha256
 
+    @retry(Exception, tries=3, delay=1)
     def _sendFileOverWiFi(self, address, localFile, destPath):
         """@brief Send a file to the device.
            @param address The IP address of the CT6 device.
@@ -1537,18 +1540,24 @@ class UpgradeManager(LoaderBase):
 
         self.debug(f"Sending {localFile} to {address}:{destFile} (size={fSize} bytes).")
         url = f"http://{address}:80/upload"
-        with open(localFile, "rb") as f:
-            response = requests.post(
-                url,
-                data=f,
-                headers={
-                    "Content-Type": "application/octet-stream",
-                    "file": destFile
-                }
-            )
-        # Check the file transfer completed successfully
-        if response.status_code != 200:
-            raise Exception(f"File send failed: {response}")
+
+        with open(localFile, 'rb') as f:
+            first = True
+            if fSize == 0:
+                headers = {'X-File-Name': destFile,
+                           'X-Start': '1' if first else '0'}
+                # Send an empty file, E.G __init__.py
+                requests.post(url, data=b'', headers=headers)
+
+            else:
+                while chunk := f.read(UpgradeManager.MAX_CHUNK_SIZE):
+                    headers = {'X-File-Name': destFile,
+                               'X-Start': '1' if first else '0'}
+                    response = requests.post(url, data=chunk, headers=headers)
+                    if response.status_code != 200:
+                        # We rely on the sha256 for checking file integrity so don't need to report error here.
+                        break
+                    first = False
 
         # Check that the sha256 hash of the local and remote files match.
         remoteSHA256 = self._getSHA256(address, destFile)
