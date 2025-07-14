@@ -569,6 +569,10 @@ class GUIServer(TabbedNiceGui):
         self._scanSecondsInput.value = self._cfgMgr.getAttr(GUIServer.SCAN_SECONDS)
         self._scanIPAddressInput.value = self._cfgMgr.getAttr(GUIServer.SCAN_IP_ADDRESS)
 
+        # If no port has been set select the first in the list
+        if not self._scanPortSelect.value:
+            self._scanPortSelect.value = portOptions[0]
+
         # Enable events once we've set the initial state from stored cfg
         self._scanPortSelect.on('update:modelValue', self._saveConfig)
         self._scanSecondsInput.on('change', self._saveConfig)
