@@ -1378,7 +1378,7 @@ class MCULoader(LoaderBase):
         for _file in srcFileList:
             if cmdOutput.find(_file) == -1:
                 raise Exception(f"Failed to load the {_file} file onto the MCU device.")
-        self.info(f"Loaded all {len(fileList)} python files.")
+        self.info(f"Loaded all {len(fileList)} files.")
         return totalSizeAllFiles
 
     def _deleteAllMCUFiles(self, port):
