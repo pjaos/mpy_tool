@@ -398,7 +398,7 @@ class GUIServer(TabbedNiceGui):
                 self.info(f"MCU: {mcuType}.")
                 # Wait for Pico path if we need it.
                 if LoaderBase.IsPicoW(mcuType) and (self._eraseMCUFlashInput.value or self._loadMicroPythonInput.value):
-                    USBLoader.WaitForPicoPath()
+                    USBLoader.WaitForPicoPath(mcuType)
 
                 usbLoader = USBLoader(mcuType, uio=self)
                 usbLoader.setSerialPort(self._serialPortSelect1.value)

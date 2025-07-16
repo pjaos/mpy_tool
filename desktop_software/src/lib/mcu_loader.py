@@ -52,6 +52,9 @@ class LoaderBase(MCUBase):
     VALID_ESP32_TYPES           = [ESP32_MCU_TYPE, ESP32C3_MCU_TYPE, ESP32C6_MCU_TYPE]
     VALID_MCU_TYPES             = VALID_PICOW_TYPES + VALID_ESP32_TYPES
 
+    PICOW_BRD_ID                = 'RPI-RP2'
+    PICO2W_BRD_ID               = 'RP2350'
+
     @staticmethod
     def IsPicoW(mcuType):
         return mcuType in LoaderBase.VALID_PICOW_TYPES
@@ -593,7 +596,8 @@ class USBLoader(LoaderBase):
     ESP32C6_PARTITION_TABLE_IMAGE   = ESP32C3_PARTITION_TABLE_IMAGE
     ESP32C6_MICROPYTHON_IMAGE       = ESP32C3_MICROPYTHON_IMAGE
     ESPTOOL_DETECTING_CHIP_TYPE     = "Detecting chip type..."
-    RPI_BOOT_BTN_DWN_FILE_LIST      = ["index.htm", "info_uf2.txt"]
+    INFO_UF2_TXT_FILE               = "info_uf2.txt"
+    RPI_BOOT_BTN_DWN_FILE_LIST      = ["index.htm", INFO_UF2_TXT_FILE]
     ERASE_PCIO_FLASH                = 1
     LOAD_MICROPYTHON_TO_PICO_FLASH  = 2
     PICO_USB_PRODUCT_PARAM          = "Board in FS mode"
@@ -701,8 +705,8 @@ class USBLoader(LoaderBase):
         srcPathList = []
         windowsPlatform = USBLoader.IsWindowsPlatform()
         if windowsPlatform:
-            driveList = ['%s:' % d for d in string.ascii_uppercase if os.path.exists('%s:' % d)]
-            srcPathList = [s for s in driveList if not s.startswith("C:")]
+            # We try all Windows drive names except A:/B: (org floppy drives) and C: (hdd/ssd drive)
+            srcPathList = ['%s:' % d for d in string.ascii_uppercase if d not in ('A', 'B' , 'C')]
 
         elif USBLoader.IsMacOSPlatform():
             srcPathList = ["/Volumes/RPI-RP2","/Volumes/RP2350"]
@@ -715,8 +719,9 @@ class USBLoader(LoaderBase):
         return srcPathList
 
     @staticmethod
-    def WaitForPicoPath(timeout=30):
+    def WaitForPicoPath(mcuType, timeout=30):
         """@brief Wait for the path to exist when a RPi Pico W flash is mounted.
+           @param mcuType The expected MCU type.
            @return The pico path found or an Exception is thrown if a timeout occurs."""
         picoPathFound = None
         picoPaths = USBLoader.GetAllPicoPaths()
@@ -738,6 +743,33 @@ class USBLoader(LoaderBase):
                                 break
 
                         if foundCount == len(USBLoader.RPI_BOOT_BTN_DWN_FILE_LIST):
+                            infoFile = os.path.join(picoPath, USBLoader.INFO_UF2_TXT_FILE)
+                            with open(infoFile, 'r') as fd:
+                                lines = fd.readlines()
+                                brdID = None
+                                for line in lines:
+                                    line = line.rstrip('\r\n')
+                                    if line.startswith('Board-ID:'):
+                                        elems = line.split(':')
+                                        if len(elems) == 2:
+                                            brdID = elems[1].strip()
+
+                                if brdID:
+                                    if brdID == USBLoader.PICOW_BRD_ID:
+                                        if mcuType != USBLoader.RPI_PICOW_MCU_TYPE:
+                                            raise Exception(f'Incorrect MCU type detected (board ID = {brdID}). Please select the correct MCU type.')
+
+                                    elif brdID == USBLoader.PICO2W_BRD_ID:
+                                        if mcuType != USBLoader.RPI_PICO2W_MCU_TYPE:
+                                            raise Exception(f'Incorrect MCU type detected (board ID = {brdID}). Please select the correct MCU type.')
+
+                                    else:
+                                        raise Exception(f"{brdID} is an unsupported Pico board ID")
+
+                                else:
+                                    raise Exception(f"Failed to read RPi Pico board ID from {infoFile}")
+
+
                             found = 1
                             picoPathFound = picoPath
 
@@ -859,7 +891,7 @@ class USBLoader(LoaderBase):
         timeoutT = time()+self._picoPathTimeout
         # Wait for the drive mounted from the RPi over the serial interface.
         while not picoPath:
-            picoPath = USBLoader.WaitForPicoPath()
+            picoPath = USBLoader.WaitForPicoPath(self._mcuType)
             if picoPath:
                 break
             if time() >= timeoutT:
@@ -915,7 +947,7 @@ class USBLoader(LoaderBase):
             if os.path.isdir(picoPath):
                 self.info(f'{picoPath} is mounted.')
                 break
-        # We wait a short while for the mount to disappear
+        # We wait a short while before copying to the drive after it mounted.
         sleep(0.5)
 
         self.info(f"Copying {sourcePath} to {destinationPath}")
@@ -929,11 +961,17 @@ class USBLoader(LoaderBase):
                 if not os.path.isdir(picoPath):
                     self.info(f'{self._mcuType} restarted after erasing the flash memory.')
                     break
-            # We wait a short while for the mount to disappear
-            sleep(0.5)
 
         else:
             self.info("Copied the MicroPython image file to the RPi Pico flash.")
+
+        self.info(f"Waiting for {picoPath} to unmount...")
+        while True:
+            if not os.path.isdir(picoPath):
+                self.info(f'{picoPath} is unmounted.')
+                break
+
+        sleep(0.5)
 
     def _run_esptool_capture(self, args):
         """@brief run the esptool to execute command/s on attached esp32 devices.
