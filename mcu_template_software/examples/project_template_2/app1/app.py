@@ -5,11 +5,8 @@ from time import time, sleep
 from lib.uo import UO, UOBase
 from lib.config import MachineConfig
 
-# Turning this off will stop messages being sent on the serial port
-SHOW_MESSAGES_ON_STDOUT = True
-# and will reduce CPU usage.
-# Note that 8388 is the max WD timeout value on pico W hardware.
-WDT_TIMEOUT_MSECS = 8300
+SHOW_MESSAGES_ON_STDOUT = True  # Turning this off will stop messages being sent on the serial port and will reduce CPU usage.
+WDT_TIMEOUT_MSECS = 8300        # Note that 8388 is the max WD timeout value on pico W hardware.
 
 
 async def start(runningAppKey, configFilename):
