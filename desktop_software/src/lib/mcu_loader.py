@@ -108,16 +108,14 @@ class LoaderBase(MCUBase):
                   called prior to calling this method leaving the serial port open.
            @param uio A UIO instance.
            @param ser n open serial port connected to an ESP32 device."""
-        ser.dtr = False
-        ser.rts = True
+        # Reset ESP32
+        ser.setDTR(False)  # IO0 high
+        ser.setRTS(True)   # EN low (reset)
         uio.info("Asserting esp32 hardware reset.")
         sleep(0.25)
-        ser.dtr = True
-        ser.rts = False
+        ser.setRTS(False)  # EN high
         uio.info("Released esp32 hardware reset.")
-        # Allow a short time for the esp32 to come out of the reset state
         sleep(0.25)
-
 
     @staticmethod
     def REPLGetFileContents(ser, filename):
@@ -270,14 +268,13 @@ class LoaderBase(MCUBase):
         """@brief Wait for a serial port to appear on this machine.
            @param baud The baud rate of the serial port in bps.
            @return A reference to the open serial port obj."""
-# PJA Check each MCU is ok with this
         # Set the CTRL sigs for the MCU
         if self._isPico():
             dtr=True
             rts=True
         else:
-            dtr=True
-            rts=True
+            dtr=False
+            rts=False
         return self._openFirstSerialPort(baud=baud, dtr=dtr, rts=rts)
 
     def _deleteFiles(self, fileList, showMsg=True):
@@ -293,7 +290,14 @@ class LoaderBase(MCUBase):
         """@brief Get the RSHell command line.
            @param port The serial port to use.
            @param cmdFile The rshell command to execute."""
-        cmd = f'mpy_tool_rshell --rts 1 --dtr 1 --timing -p {port} --buffer-size 128 -f "{cmdFile}"'
+        # Set the CTRL sigs for the MCU
+        if self._isPico():
+            dtr=1
+            rts=1
+        else:
+            dtr=0
+            rts=0
+        cmd = f'mpy_tool_rshell --rts {rts} --dtr {dtr} --timing -p {port} --buffer-size 128 -f "{cmdFile}"'
         return cmd
 
     def _runRshellCmdFile(self, port, cmdFile, allowFailure=False):
@@ -993,8 +997,10 @@ class USBLoader(LoaderBase):
             try:
                 esptool._main()
                 error = False
+
             except SystemExit:
-                pass
+                # Normal esptool._main() execution gets us here.
+                error = False
 
             except Exception:
                 pass
