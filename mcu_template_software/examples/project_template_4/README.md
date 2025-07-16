@@ -1,4 +1,4 @@
-# Example Project 3
+# Example Project 4
 
 Template project
 

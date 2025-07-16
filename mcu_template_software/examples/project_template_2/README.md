@@ -1,4 +1,4 @@
-# Example Project 1
+# Example Project 2
 
 Project template with no WiFi or bluetooth setup included.
 
