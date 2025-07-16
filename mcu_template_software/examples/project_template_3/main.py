@@ -12,7 +12,6 @@ def get_active_app():
     """@brief Get the active app from the field in the config dict file.
        @return Either 1 or 2"""
     active_app = 1
-    print("PJA: get_active_app()")
     try:
         with open(CONFIG_FILENAME, "r") as read_file:
             config_dict = json.load(read_file)
