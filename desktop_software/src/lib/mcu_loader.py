@@ -135,7 +135,7 @@ class LoaderBase(MCUBase):
             if bytesAvailable > 0:
                 data = ser.read(bytesAvailable)
                 if len(data) > 0:
-                    data=data.decode()
+                    data=data.decode("utf-8", errors="ignore")
                     lines = data.split("\n")
                     for line in lines:
                         if line.startswith('{"'):
@@ -163,7 +163,7 @@ class LoaderBase(MCUBase):
             if bytesAvailable > 0:
                 data = ser.read(bytesAvailable)
                 if len(data) > 0:
-                    data=data.decode()
+                    data=data.decode("utf-8", errors="ignore")
                     lines = data.split("\n")
                     for line in lines:
                         line=line.rstrip("\n\r")
@@ -310,11 +310,11 @@ class LoaderBase(MCUBase):
         self.debug(f"EXECUTING: {rshellCmd}")
         if allowFailure:
             try:
-                return check_output(rshellCmd, shell=True).decode()
+                return check_output(rshellCmd, shell=True).decode("utf-8", errors="ignore")
             except Exception as ex:
                 self.error( str(ex) )
         else:
-            return check_output(rshellCmd, shell=True).decode()
+            return check_output(rshellCmd, shell=True).decode("utf-8", errors="ignore")
 
     def _runRShell(self, cmdList):
         """@brief Run an rshell command file.
@@ -402,7 +402,7 @@ class LoaderBase(MCUBase):
                         # Read the data that's arrived so
                         data = self._ser.read(self._ser.in_waiting)
                         if len(data) > 0:
-                            data=data.decode()
+                            data=data.decode("utf-8", errors="ignore")
                             self.debug(f"Serial data = {data}")
                             pos = data.find("MicroPython")
                             if pos >= 0:
@@ -1154,7 +1154,7 @@ class USBLoader(LoaderBase):
                 try:
                     while running:
                         bytesRead = self._ser.read_until()
-                        sRead = bytesRead.decode()
+                        sRead = bytesRead.decode("utf-8", errors="ignore")
                         sRead = sRead.rstrip('\r\n')
                         if len(sRead) > 0:
                             self.info(sRead)
@@ -1222,7 +1222,7 @@ class USBLoader(LoaderBase):
                         continue
                     data = self._ser.read(availableByteCount)
                     if len(data) > 0:
-                        data=data.decode()
+                        data=data.decode("utf-8", errors="ignore")
                         if len(data) > 0:
                             lines = data.split("\n")
                             for line in lines:
@@ -1845,7 +1845,7 @@ class YDevScanner(LoaderBase):
             #Ignore the messaage we sent
             if data != YDevScanner.AreYouThereThread.AreYouThereMessage:
                 try:
-                    dataStr = data.decode()
+                    dataStr = data.decode("utf-8", errors="ignore")
                     rx_dict = json.loads(dataStr)
                     # If the user is only interested in one device
                     if addressOfInterest:
