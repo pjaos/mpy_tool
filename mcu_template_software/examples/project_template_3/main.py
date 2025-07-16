@@ -5,17 +5,17 @@ import uasyncio as asyncio
 RUNNING_APP_KEY = "RUNNING_APP"
 CONFIG_FILENAME = "this.machine.cfg"
 
+""" !!! Note that changes to this file can cause the MCU to fail to boot after an upgrade.
+    !!! Therefore change with caution."""
 
 def get_active_app():
     """@brief Get the active app from the field in the config dict file.
        @return Either 1 or 2"""
     active_app = 1
+    print("PJA: get_active_app()")
     try:
         with open(CONFIG_FILENAME, "r") as read_file:
             config_dict = json.load(read_file)
-            # json stores the int keys as strings. Convert all keys to ints
-            # just after loading it.
-            config_dict = {int(k): v for k, v in config_dict.items()}
             if RUNNING_APP_KEY in config_dict:
                 aa = config_dict[RUNNING_APP_KEY]
                 if aa == 2:
