@@ -681,7 +681,7 @@ class GUIServer(TabbedNiceGui):
                             while self._viewSerialRunning:
                                 while ser.in_waiting > 0:
                                     bytesRead = ser.read(ser.in_waiting)
-                                    sRead = bytesRead.decode()
+                                    sRead = bytesRead.decode("utf-8", errors="ignore")
                                     sRead = sRead.rstrip('\r\n')
                                     if len(sRead) > 0:
                                         self.info(serialPort + ": " + sRead)

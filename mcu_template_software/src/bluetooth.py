@@ -29,8 +29,12 @@ class BlueTooth():
         self._rx_message = None
         self._debug = debug
         self._conn_handle = None
-
+        # We limit the BT device name to 18 characters as this is likely to be a safe choice across all OS's
+        # detecting it from the advertising packet.
         self._name = name
+        if len(self._name) > 18:
+            self._name = self._name[:18]
+
         self._ble = bluetooth.BLE()
         self._ble.active(True)
         self._disconnected()
@@ -138,23 +142,20 @@ class BlueTooth():
         self._ble.gatts_notify(self._conn_handle, self.tx, data + '\n')
 
     def _advertiser(self):
-        name = bytes(self._name, 'UTF-8')
-        adv_data = bytearray('\x02\x01\x06', 'UTF-8') + \
-            bytearray((len(name) + 1, 0x09)) + name
+        name = bytes(self._name, 'utf-8')
+        adv_data = bytearray(b'\x02\x01\x06')  # Flags
+        # 0x02 - General discoverable mode
+        # 0x01 - AD Type = 0x01
+        # 0x02 - value = 0x02
+        # https://jimmywongiot.com/2019/08/13/advertising-payload-format-on-ble/
+        # https://docs.silabs.com/bluetooth/latest/general/adv-and-scanning/bluetooth-adv-data-basics
+        resp_data = bytearray((len(name) + 1, 0x09)) + name  # Complete Local Name
+
         try:
-            self._ble.gap_advertise(100000, adv_data)
+            self._ble.gap_advertise(100_000, adv_data=adv_data, resp_data=resp_data)
             if self._debug:
                 print(adv_data)
                 print("\r\n")
-                # adv_data
-                # raw: 0x02010209094553503332424C45
-                # b'\x02\x01\x02\t\tESP32BLE'
-                #
-                # 0x02 - General discoverable mode
-                # 0x01 - AD Type = 0x01
-                # 0x02 - value = 0x02
-                # https://jimmywongiot.com/2019/08/13/advertising-payload-format-on-ble/
-                # https://docs.silabs.com/bluetooth/latest/general/adv-and-scanning/bluetooth-adv-data-basics
 
         # When the bluetooth interface is disabled an 'OSError: [Errno 19]
         # ENODEV' error will occur.

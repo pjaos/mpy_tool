@@ -3,11 +3,19 @@ import inspect
 import json
 from time import time
 from bleak import BleakClient, BleakScanner, BleakError
+from lib.general import MCUBase
 
 class BlueTooth(object):
     """@brief Responsible for communication with a device via bluetooth.
               Bluetooth has to be enabled on the local machine and the device
               for this to work."""
+
+    # An issue exists when running on MacOS in that
+    # When an ESP32 (original or newer, E.G esp32c3 etc) device is used the
+    # bluetooth device name set by the MicroPython code may not be what the
+    # MacOS bluetooth stack detects. In this case MACOS may detect this
+    # device name instead.
+    MACOS_ESP32_BT_DEV_NAME = "MPY ESP32"
 
     @staticmethod
     async def _IsBluetoothEnabled():
@@ -53,6 +61,9 @@ class BlueTooth(object):
             for device in dev_list:
                 if device.name and device.name.startswith(dev_filter_string):
                     device_list.append(device)
+                elif MCUBase.IsMacOSPlatform() and device.name == BlueTooth.MACOS_ESP32_BT_DEV_NAME:
+                    device_list.append(device)
+
         else:
             device_list = dev_list
         return device_list
@@ -405,3 +416,32 @@ if __name__== '__main__':
     main()
 
 """
+
+"""
+# Example to detect all bluetooth devices.
+
+def main():
+
+    if BlueTooth.IsBluetoothEnabled():
+        devices = BlueTooth.Scan(seconds=5)
+        for device in devices:
+            print(f"------------------------------------")
+            print(f"device.name    = {device.name}")
+            print(f"device.address = {device.address}")
+            print(f"local_name     = {device.metadata.get('local_name')}")
+            if 'path' in device.details:
+                print(f'path           ={device.details['path']}')
+            print('PROPERTIES')
+            if 'props' in device.details:
+                properties = device.details['props']
+                for prop in properties:
+                    print(f'{prop:<20s}: {properties[prop]}')
+
+
+    else:
+        print("Bluetooth is not available. Please enable bluetooth.")
+
+if __name__== '__main__':
+    main()
+"""
+
