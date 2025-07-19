@@ -92,8 +92,8 @@ class BaseMachine(UOBase):
 
         else:
             # !!!
-            # Currently MicrPython for the ESP32C6 is under development and the
-            # version of MicroPython in this tool Micropython returns ESP32
+            # Currently MicroPython for the ESP32C6 is under development and the
+            # image of MicroPython in this tool returns ESP32
             # rather than ESP32C6 for esp32c6 HW.
             if 'ESP32C6' in mcu:
                 gpio_pin = 9
@@ -129,8 +129,8 @@ class BaseMachine(UOBase):
 
         else:
             # !!!
-            # Currently MicrPython for the ESP32C6 is under development and the
-            # version of MicroPython in this tool Micropython returns ESP32
+            # Currently MicroPython for the ESP32C6 is under development and the
+            # image of MicroPython in this tool returns ESP32
             # rather than ESP32C6 for esp32c6 HW.
             if 'ESP32C6' in mcu:
                 gpio_pin = 8
