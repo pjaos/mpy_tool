@@ -691,7 +691,6 @@ class GUIServer(TabbedNiceGui):
     def _viewSerialPortData(self, resetESP32):
         """@brief Read data from the available serial port and display it.
            @param resetESP32 If True The perform a hardware reset using the RTS/DTR control signals."""
-        print(f"PJA: resetESP32={resetESP32}")
         try:
             ser = None
             usbLoader = None
