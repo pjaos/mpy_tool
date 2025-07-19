@@ -91,8 +91,14 @@ class BaseMachine(UOBase):
             gpio_pin = override
 
         else:
-            # !!! Current Micropython returns ESP32 rather than ESP32C6 for esp32c6 HW
-            if 'ESP32C6' in mcu or 'ESP32C3' in mcu:
+            # !!!
+            # Currently MicrPython for the ESP32C6 is under development and the
+            # version of MicroPython in this tool Micropython returns ESP32
+            # rather than ESP32C6 for esp32c6 HW.
+            if 'ESP32C6' in mcu:
+                gpio_pin = 9
+
+            if 'ESP32C3' in mcu:
                 gpio_pin = 9
 
             elif 'ESP32' in mcu:
@@ -122,8 +128,14 @@ class BaseMachine(UOBase):
             gpio_pin = override
 
         else:
-            # !!! Current Micropython returns ESP32 rather than ESP32C6 for esp32c6 HW
-            if 'ESP32C6' in mcu or 'ESP32C3' in mcu:
+            # !!!
+            # Currently MicrPython for the ESP32C6 is under development and the
+            # version of MicroPython in this tool Micropython returns ESP32
+            # rather than ESP32C6 for esp32c6 HW.
+            if 'ESP32C6' in mcu:
+                gpio_pin = 8
+
+            if 'ESP32C3' in mcu:
                 gpio_pin = 8
 
             elif 'ESP32' in mcu:

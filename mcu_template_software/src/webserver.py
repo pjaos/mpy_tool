@@ -4,12 +4,13 @@ import machine
 import hashlib
 import binascii
 import ujson as json
-from time import time
+from time import time, sleep
+import _thread
 
 from lib.microdot.microdot import Microdot, Response
 from lib.config import MachineConfig
 from lib.io import IO
-from lib.hardware import const, Hardware
+from lib.hardware import const
 from lib.fs import VFS
 from lib.wifi import WiFi
 
@@ -293,17 +294,16 @@ class WebServer():
         """@brief reboot the device."""
         # Ensure the file system is synced before we reboot.
         os.sync()
-        rebootTimer = Hardware.GetTimer()
-        # Reboot in 500 ms
-        rebootTimer.init(mode=machine.Timer.ONE_SHOT, period=500, callback=self._doReboot)
-        responseDict = WebServer.GetOKDict()
-        responseDict["INFO"] = "Reboot in progress..."
-        return responseDict
+        # Start thread to reboot MCU. Used to use a Timer but the ESP32C6 MicroPython
+        # failed to work because at this time ESP32C6 MicroPython Timer support is yet to be added.
+        _thread.start_new_thread(self._doReboot, ())
+        return
 
-    def _doReboot(self, v):
+    def _doReboot(self):
         """@brief Perform a device restart."""
         self._uo.info("Rebooting now.")
-        # This does not always work
+        sleep(0.25)
+        # !!! This does not always work
         machine.reset()
 
     def resetToDefaultConfig(self):

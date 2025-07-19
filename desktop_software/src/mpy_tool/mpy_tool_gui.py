@@ -59,6 +59,7 @@ class GUIServer(TabbedNiceGui):
                                    SCAN_SECONDS: 5,
                                    SCAN_IP_ADDRESS: ""}
     DESCRIP_STYLE_1             = '<span style="font-size:1.5em;">'
+    SERIAL_PORT_OPEN            = 'SERIAL_PORT_OPEN'
 
     @staticmethod
     def GetCmdOpts():
@@ -295,6 +296,10 @@ class GUIServer(TabbedNiceGui):
     def _installMicroPythonButtonHandler(self, event):
         """@brief Process button click.
            @param event The button event."""
+        if self._is_serial_port_open():
+            ui.notify('The serial port is open in the SERIAL PORT tab. Close it and try again.', type='negative')
+            return
+
         self._clearMessages()
         mcuType = self._mcuTypeSelect.value
         if mcuType:
@@ -329,29 +334,16 @@ class GUIServer(TabbedNiceGui):
         startMessage="MCU: "
         duration = 0
         try:
+            # We just set a long progress bar duration seconds here that should cover most installs.
+            # We used to try and guess the time but it wasn't very accurate for various reasons.
+            # Considered removing the progress bar but it's useful to know that the thread
+            # is still active.
+            duration = 600
             if LoaderBase.IsPicoW(mcuType):
                 self.info(f"Checking for a mounted {mcuType} drive...")
-                # This needs updating to handle each combination of load options
-                if self._eraseMCUFlashInput.value:
-                    duration = 13
-                if self._loadMicroPythonInput.value:
-                    duration+=28
-
-                if self._loadAppInput.value:
-                    duration+=60
-
                 self._startProgress(durationSeconds=duration, startMessage=startMessage)
             else:
                 self._checkSerialPortAvailable(self._serialPortSelect1.value)
-                if self._eraseMCUFlashInput.value:
-                    duration = 15
-
-                if self._loadMicroPythonInput.value:
-                    duration+=122
-
-                if self._loadAppInput.value:
-                    duration+=58
-
                 self._startProgress(durationSeconds=duration, startMessage=startMessage)
 
             t = threading.Thread( target=self._installSW)
@@ -514,7 +506,12 @@ class GUIServer(TabbedNiceGui):
            @param event The button event."""
         self._initTask()
         self._saveConfig()
-        self._startProgress(durationSeconds=90)
+        # We just set a long progress bar duration seconds here that should cover most installs.
+        # We used to try and guess the time but it wasn't very accurate for various reasons.
+        # Considered removing the progress bar but it's useful to know that the thread
+        # is still active.
+        duration = 240
+        self._startProgress(durationSeconds=duration)
         t = threading.Thread( target=self._appUpgrade)
         t.daemon = True
         t.start()
@@ -638,6 +635,7 @@ class GUIServer(TabbedNiceGui):
             self._sendCtrlDButton  = ui.button('CTRL D', on_click=self._sendCtrlD).tooltip("Start running the main.py file (if it exists) from REPL prompt.")
             self._sendTextButton  = ui.button('SEND', on_click=self._sendText)
             self._sendTextInput = ui.input(label='Text to send').style('width: 400px;')
+            self._sendTextInput.on('keydown.enter', lambda _: self._sendText())
 
         self._setSerialPortClosed()
 
@@ -650,16 +648,36 @@ class GUIServer(TabbedNiceGui):
         if self._serialPortSelect2:
             self._serialPortSelect2.value = self._serialPortSelect3.value
 
+    def _update_serial_port_open_buttons(self, open):
+        self._openSerialPortButton.enabled = not open
+        self._closeSerialPortButton.enabled = open
+        self._sendCtrlBButton.enabled = open
+        self._sendCtrlCButton.enabled = open
+        self._sendCtrlDButton.enabled = open
+        self._sendTextButton.enabled = open
+
     def _openSerialPortHandler(self):
         # Enable the close serial port button so that the user can close the serial port when they are finished.
-        self._closeSerialPortButton.enable()
-        self._sendCtrlBButton.enable()
-        self._sendCtrlCButton.enable()
-        self._sendCtrlDButton.enable()
-        self._sendTextButton.enable()
-        t = threading.Thread(target=self._viewSerialPortData)
-        t.daemon = True
-        t.start()
+        if not self._serialPortSelect1.value:
+            ui.notify('No serial port is selected.', type='negative')
+        else:
+            t = threading.Thread(target=self._viewSerialPortData)
+            t.daemon = True
+            t.start()
+
+    def _is_serial_port_open(self):
+        """@brief Determine if the user has opened the serial port in the SERIAL PORT tab.
+           @return True if the serial port is open."""
+        open = False
+        if self._closeSerialPortButton.enabled:
+            open = True
+        return open
+
+    def _sendSerialPortOpen(self, open):
+        """@brief Send a message to the GUI to tell it that the serial port is open.
+           @param open If True the serial port has been opened."""
+        msgDict = {GUIServer.SERIAL_PORT_OPEN: open}
+        self.updateGUI(msgDict)
 
     def _viewSerialPortData(self):
         """@brief Read data from the available serial port and display it."""
@@ -676,6 +694,7 @@ class GUIServer(TabbedNiceGui):
                     self.info(f"{mcuType} on {serialPort}")
                     usbLoader = USBLoader(mcuType, uio=self)
                     ser = usbLoader.openFirstSerialPort()
+                    self._sendSerialPortOpen(True)
                     try:
                         try:
                             while self._viewSerialRunning:
@@ -714,6 +733,7 @@ class GUIServer(TabbedNiceGui):
                 if usbLoader:
                     self.info(f"Closed {usbLoader._serialPort}")
                 usbLoader = None
+            self._sendSerialPortOpen(False)
             self._sendEnableAllButtons(True)
 
     def _sendCtrlB(self):
@@ -1374,6 +1394,10 @@ class GUIServerEXT1(GUIServer):
             # Set the IP address field to the CT6 address
             self._copyYDevAddress(address)
             self._saveConfig()
+
+        if GUIServer.SERIAL_PORT_OPEN in rxDict:
+            open = rxDict[GUIServerEXT1.SERIAL_PORT_OPEN]
+            self._update_serial_port_open_buttons(open)
 
     def _continueYDevWifiBTSetup(self, btMacAddress, wifiNetworkDicts):
         self._btMacAddress = btMacAddress
