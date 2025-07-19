@@ -368,26 +368,27 @@ class LoaderBase(MCUBase):
         success = False
         self.debug("_checkMicroPython(): START")
         timeoutS = time()+timeoutSeconds
+        replPromptFound = False
         try:
             try:
                 self.openFirstSerialPort()
                 if self._serialPort:
                     self.info(f"Found USB port: {self._serialPort}")
-                timeToSendCTRLC = time()
+                timeToSend = time()+1
                 self.info(f"Checking for MCU MicroPython prompt ({timeoutSeconds} second timeout)...")
                 while True:
                     self.debug(".")
                     now = time()
                     # Send CTRL C periodically
-                    if now >= timeToSendCTRLC:
-                        # Send CTRL C, CTRL B
-                        self._ser.write(b"\03")
-                        sleep(0.25)
-                        self._ser.write(b"\02")
-                        self.debug("Checking for MCU MicroPython prompt.")
-                        self.debug("Sent CTRL C/CTRL B")
-                        # Send CTRL C every 3 seconds
-                        timeToSendCTRLC = now+3
+                    if now >= timeToSend:
+                        if replPromptFound:
+                            self._ser.write(b"\02")
+                            self.debug("Sent CTRL B")
+                        else:
+                            self._ser.write(b"\03")
+                            self.debug("Sent CTRL C")
+                        # Send every 2 seconds
+                        timeToSend = now+2
 
                     elif self._ser.in_waiting > 0:
                         # Read the data that's arrived so
@@ -395,20 +396,25 @@ class LoaderBase(MCUBase):
                         if len(data) > 0:
                             data=data.decode("utf-8", errors="ignore")
                             self.debug(f"Serial data = {data}")
-                            pos = data.find("MicroPython")
-                            if pos >= 0:
-                                _data = data[pos:]
-                                lines = _data.split("\r\n")
-                                if len(lines) > 0:
-                                    line = lines[0]
-                                    self.info(line)
-                                    if checkMCUCorrect:
-                                        self._checkMCUCorrect(line)
-                                    success = True
-                                    break
+                            if replPromptFound:
+                                pos = data.find("MicroPython")
+                                if pos >= 0:
+                                    _data = data[pos:]
+                                    lines = _data.split("\r\n")
+                                    if len(lines) > 0:
+                                        line = lines[0]
+                                        self.info(line)
+                                        if checkMCUCorrect:
+                                            self._checkMCUCorrect(line)
+                                        success = True
+                                        break
+                            else:
+                                pos = data.find(">>>")
+                                if pos >= 0:
+                                    replPromptFound = True
 
                     # Delay so we don't spinlock and to allow serial data to arrive
-                    sleep(0.1)
+                    sleep(0.25)
 
                     if time() > timeoutS:
                         raise Exception(f"{timeoutSeconds} second timeout waiting for MCU MicroPython prompt.")
@@ -1170,7 +1176,7 @@ class USBLoader(LoaderBase):
             self._checkMicroPython(closeSerialPort=False)
             thisMachineFileContents = LoaderBase.REPLGetFileContents(self._ser, LoaderBase.MACHINE_CONFIG_FILE)
             if thisMachineFileContents is None or thisMachineFileContents == '>>> ':
-                raise Exception(f"The MCU device does not have a {LoaderBase.MACHINE_CONFIG_FILE} file. This is created when the MCU boots the first time.")
+                raise Exception(f"The MCU device does not have a {LoaderBase.MACHINE_CONFIG_FILE} file. This should be created when the MCU boots the first time running example Project 3 or later.")
             thisMachineDict = json.loads(thisMachineFileContents)
             orgConfigStr = json.dumps(thisMachineDict, indent=4)
             self.debug(f"ORG CONFIG: <{orgConfigStr}>")
