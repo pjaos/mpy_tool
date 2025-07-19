@@ -98,7 +98,7 @@ class BaseMachine(UOBase):
             if 'ESP32C6' in mcu:
                 gpio_pin = 9
 
-            if 'ESP32C3' in mcu:
+            elif 'ESP32C3' in mcu:
                 gpio_pin = 9
 
             elif 'ESP32' in mcu:
@@ -135,7 +135,7 @@ class BaseMachine(UOBase):
             if 'ESP32C6' in mcu:
                 gpio_pin = 8
 
-            if 'ESP32C3' in mcu:
+            elif 'ESP32C3' in mcu:
                 gpio_pin = 8
 
             elif 'ESP32' in mcu:
