@@ -106,7 +106,7 @@ class GUIServer(TabbedNiceGui):
         try:
             tabNameList = ('Install',
                            'WiFi',
-                           'Upgrade',
+                           'OTA (Over The Air)',
                            'Serial Port',
                            'Scan',
                            'Memory Monitor')
@@ -485,8 +485,8 @@ class GUIServer(TabbedNiceGui):
         self._copyYDevAddress(self._deviceIPAddressInput1.value)
 
     def _initUpgradeTab(self):
-        """@brief Create the Wifi tab contents."""
-        markDownText = f"{GUIServer.DESCRIP_STYLE_1}Upgrade the device App over your WiFi network."
+        """@brief Create a tab used for over the air actions. Initially this ws just upgrading over the air, hence the name."""
+        markDownText = f"{GUIServer.DESCRIP_STYLE_1}Update an MCU over your WiFi network."
         ui.markdown(markDownText)
         with ui.row():
             self._deviceIPAddressInput1 = ui.input(label='Device address', on_change=self._deviceIPAddressInput1Change)
@@ -503,11 +503,46 @@ class GUIServer(TabbedNiceGui):
             self._upgradeAppPathInput.value = self._cfgMgr.getAttr(GUIServer.MCU_MAIN_PY)
             self._defaultUpgradeAppButton = ui.button('select mcu main.py', on_click=self._select_main_py)
 
-        self._upgradeButton = ui.button('Upgrade App', on_click=self._upgradeButtonHandler)
-        # Add to button list so that button is disabled while activity is in progress.
-        self._appendButtonList(self._upgradeButton)
+        with ui.row():
+            self._upgradeButton = ui.button('Upgrade App', on_click=self._upgradeButtonHandler)
+            # Add to button list so that button is disabled while activity is in progress.
+            self._appendButtonList(self._upgradeButton)
+            self._upgradeAppPathInput.on('change', self._upgradeAppPathInputUpdated)
 
-        self._upgradeAppPathInput.on('change', self._upgradeAppPathInputUpdated)
+            self._resetWifiButton = ui.button('Reset WiFi configuration', on_click=self._resetWifiButtonHandler).tooltip('Reset the WiFi configuration and reboot the MCU.')
+            self._appendButtonList(self._resetWifiButton)
+
+    def _resetWifiButtonHandler(self):
+        """@brief handle a user selecting the button to reset the WiFi config."""
+        self._initTask()
+        self._saveConfig()
+        duration = 120
+        self._startProgress(durationSeconds=duration)
+        t = threading.Thread( target=self._resetWiFiConfigThread)
+        t.daemon = True
+        t.start()
+
+    def _resetWiFiConfigThread(self):
+        """@brief The thread responsible to resetting the MCU WiFi config."""
+        try:
+            try:
+                address = self._deviceIPAddressInput1.value
+                appPath = self._upgradeAppPathInput.value
+                if len(address) == 0:
+                    self.error("A device address is required.")
+
+                else:
+                    self.info(f"Reset the WiFi config for the MCU at {address}.")
+
+                    upgradeManager = UpgradeManager(self._mcuTypeSelect.value, uio=self)
+                    upgradeManager.resetWifiConfig(address)
+                    self.infoDialog("WiFi config has been reset and the MCU is rebooting.")
+
+            except Exception as ex:
+                self.reportException(ex)
+
+        finally:
+            self._sendEnableAllButtons(True)
 
     def _upgradeButtonHandler(self, event):
         """@brief Process button click.

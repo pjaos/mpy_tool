@@ -297,7 +297,9 @@ class WebServer():
         # Start thread to reboot MCU. Used to use a Timer but the ESP32C6 MicroPython
         # failed to work because at this time ESP32C6 MicroPython Timer support is yet to be added.
         _thread.start_new_thread(self._doReboot, ())
-        return
+        responseDict = WebServer.GetOKDict()
+        responseDict["INFO"] = "Reboot in progress..."
+        return responseDict
 
     def _doReboot(self):
         """@brief Perform a device restart."""

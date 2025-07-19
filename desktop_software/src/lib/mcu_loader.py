@@ -364,8 +364,8 @@ class LoaderBase(MCUBase):
            @param closeSerialPort If True then close the serial port on exit.
            @param timeoutSeconds Seconds to wait before timeout.
            @param checkMCUCorrect If True ensure the configured MCU type is correct.
-           @return True on success."""
-        success = False
+           @return The MicroPython description line returned in response to CTRL sent on the serial port or None."""
+        mpDescripLine = None
         self.debug("_checkMicroPython(): START")
         timeoutS = time()+timeoutSeconds
         replPromptFound = False
@@ -404,9 +404,9 @@ class LoaderBase(MCUBase):
                                     if len(lines) > 0:
                                         line = lines[0]
                                         self.info(line)
+                                        mpDescripLine = line
                                         if checkMCUCorrect:
                                             self._checkMCUCorrect(line)
-                                        success = True
                                         break
                             else:
                                 pos = data.find(">>>")
@@ -432,7 +432,7 @@ class LoaderBase(MCUBase):
                 self._closeSerialPort()
 
         self.debug("_checkMicroPython(): STOP")
-        return success
+        return mpDescripLine
 
     def esp32HWReset(self, ser=None):
         """@brief Perform a reset on an ESP32 device.
@@ -1164,16 +1164,25 @@ class USBLoader(LoaderBase):
             finally:
                 self._closeSerialPort()
 
+    def _isEsp32Connected(self, line):
+        """@brief Determine if an esp32 (any type) is connected.
+           @param line The line of text returned from _checkMicroPython().
+           @return True if an esp32 is connected."""
+        esp32 = False
+        if line.find('ESP32') != -1:
+            esp32 = True
+        return esp32
 
     def setupWiFi(self, ssid, password):
-        """@brief Update the WiFi config on the MCU device to ensure it will connect to the wiFi
+        """@brief Update the WiFi config on the MCU device using the USB port to ensure it will connect to the wiFi
                   network when the software is started.
            @param ssid The Wifi SSID/network.
            @param password The WiFi password.
            @return the configured SSID"""
         try:
             # Attempt to connect to the board under test python prompt
-            self._checkMicroPython(closeSerialPort=False)
+            mpLine = self._checkMicroPython(closeSerialPort=False)
+            esp32 = self._isEsp32Connected(mpLine)
             thisMachineFileContents = LoaderBase.REPLGetFileContents(self._ser, LoaderBase.MACHINE_CONFIG_FILE)
             if thisMachineFileContents is None or thisMachineFileContents == '>>> ':
                 raise Exception(f"The MCU device does not have a {LoaderBase.MACHINE_CONFIG_FILE} file. This should be created when the MCU boots the first time running example Project 3 or later.")
@@ -1197,10 +1206,11 @@ class USBLoader(LoaderBase):
         localMachineCfgFile = USBLoader.GetRShellPath(localMachineCfgFile)
         # Copy the machine config file back to the MCU flash
         self._runRShell((f'cp "{localMachineCfgFile}" /pyboard/',) )
-        return self._runApp()
+        return self._runApp(esp32)
 
-    def _runApp(self, waitForIPAddress=True, timeoutSec=10):
+    def _runApp(self, esp32, waitForIPAddress=True, timeoutSec=60):
         """@brief Run the firmware on the MCU.
+           @param esp32 True if any type of esp32 is connected.
            @param waitForIPAddress If True wait for an IP address to be allocated to the unit.
            @return The IP address that the MCU obtains when registered on the WiFi if waitForIPAddress == True or None if not."""
         ipAddress = None
@@ -1208,8 +1218,10 @@ class USBLoader(LoaderBase):
         timeoutT = time()+timeoutSec
         try:
             try:
+                self.rebootUnit(esp32HWReboot=esp32)
+
                 self.openFirstSerialPort()
-                self._ser.write(b"import main\r")
+
                 while True:
                     availableByteCount = self._ser.in_waiting
                     if availableByteCount == 0:
@@ -1444,6 +1456,7 @@ class UpgradeManager(LoaderBase):
     SWAP_ACTIVE_APP                 = "/swap_active_app"
     REBOOT_DEVICE                   = "/reboot"
     GET_SHA256                      = "/sha256"
+    RESET_WIFI_CONFIG               = "/reset_wifi_config"
 
     DISK_TOTAL_BYTES                = "DISK_TOTAL_BYTES"
     DISK_USED_BYTES                 = "DISK_USED_BYTES"
@@ -1772,6 +1785,18 @@ class UpgradeManager(LoaderBase):
             self.deleteLocalMPYFiles(showMsg=False)
 
         self._showFreeDiskSpace(address)
+
+    def resetWifiConfig(self, address):
+        """@brief Perform an MCU upgrade.
+           @param address The address of the MCU on the wiFi network."""
+        if not address:
+            raise Exception("An IP address is required to reset the WiFi configuration.")
+
+        self.info("Reset MCU WiFi configuration..")
+        self._runCommand(address, UpgradeManager.RESET_WIFI_CONFIG, returnDict = True)
+
+        self.info("Rebooting the device.")
+        self._runCommand(address, UpgradeManager.REBOOT_DEVICE, returnDict = False)
 
 class YDevScanner(LoaderBase):
     """@brief Responsible for scanning for YDev devices."""
