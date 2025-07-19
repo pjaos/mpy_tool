@@ -303,6 +303,11 @@ class GUIServer(TabbedNiceGui):
         self._clearMessages()
         mcuType = self._mcuTypeSelect.value
         if mcuType:
+            # If loading a MicroPython app and not loading MicroPython a serial port is required.
+            if self._loadAppInput.value and not self._loadMicroPythonInput.value and not self._serialPortSelect1.value:
+                ui.notify('No serial port is selected.', type='negative')
+                return
+
             # For ESP32's you must erase the flash before loading it
             if mcuType in LoaderBase.VALID_ESP32_TYPES and self._loadMicroPythonInput.value:
                 self._eraseMCUFlashInput.value = True
@@ -631,6 +636,7 @@ class GUIServer(TabbedNiceGui):
         with ui.row():
             self._openSerialPortButton  = ui.button('Open', on_click=self._openSerialPortHandler)
             self._closeSerialPortButton = ui.button('Close', on_click=self._closeSerialPortHandler)
+            self._hwResetESP32 = ui.switch("HW Reset ESP32", value=False).tooltip('Perform a reset using DTR/RTS if an ESP32 MCU is connected when the serial port is opened.')
 
         with ui.row():
             self._sendCtrlCButton  = ui.button('CTRL C', on_click=self._sendCtrlC).tooltip("Stop program and get REPL (>>>) prompt.")
@@ -664,7 +670,7 @@ class GUIServer(TabbedNiceGui):
         if not self._serialPortSelect1.value:
             ui.notify('No serial port is selected.', type='negative')
         else:
-            t = threading.Thread(target=self._viewSerialPortData)
+            t = threading.Thread(target=self._viewSerialPortData, args=(self._hwResetESP32.value,))
             t.daemon = True
             t.start()
 
@@ -682,8 +688,10 @@ class GUIServer(TabbedNiceGui):
         msgDict = {GUIServer.SERIAL_PORT_OPEN: open}
         self.updateGUI(msgDict)
 
-    def _viewSerialPortData(self):
-        """@brief Read data from the available serial port and display it."""
+    def _viewSerialPortData(self, resetESP32):
+        """@brief Read data from the available serial port and display it.
+           @param resetESP32 If True The perform a hardware reset using the RTS/DTR control signals."""
+        print(f"PJA: resetESP32={resetESP32}")
         try:
             ser = None
             usbLoader = None
@@ -698,6 +706,9 @@ class GUIServer(TabbedNiceGui):
                     usbLoader = USBLoader(mcuType, uio=self)
                     try:
                         ser = usbLoader.openFirstSerialPort()
+                        if resetESP32:
+                            LoaderBase.ResetESP32(self._uio, ser)
+
                     except serial.serialutil.SerialException as ex:
                         if str(ex).find('Could not exclusively lock port'):
                             self.error("It appears the serial port is in use by another program.")
