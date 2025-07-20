@@ -573,6 +573,35 @@ class LoaderBase(MCUBase):
                 pass
         return pingSec
 
+    def _waitForPingSuccess(self, address, restartTimeout=60, pingHoldSecs = 3):
+        """@brief Wait for a reconnect to the WiFi network.
+           @param address The address of the MCU on the wiFi network.
+           @param restartTimeout The number of seconds before an exception is thrown if the WiFi does not reconnect.
+           @param pingHoldSecs The number of seconds of constant pings before we determine the WiFi has reconnected.
+                               This is required because the Pico W may ping and then stop pinging before pinging
+                               again when reconnecting to the Wifi."""
+        startT = time()
+        pingRestartTime = None
+        self.info("Waiting for the MCU to reconnect to the WiFi network.")
+        while True:
+            pingSec = self.doPing(address)
+            if pingSec is not None:
+                if pingRestartTime is None:
+                    pingRestartTime = time()
+
+                if time() > pingRestartTime+pingHoldSecs:
+                    break
+
+            else:
+                pingRestartTime = None
+
+            if time() >= startT+restartTimeout:
+                raise Exception(f"Timeout waiting for {address} to become pingable.")
+
+            sleep(0.25)
+
+        self.info(f"{address} ping success.")
+
     def checkMCUCode(self):
         """@brief Run pyflakes3 on the app1 folder code to check for errors before loading it."""
         self.info("Checking python code in the app1 folder using pyflakes")
@@ -1708,35 +1737,6 @@ class UpgradeManager(LoaderBase):
                 raise Exception(f"{rebootTimeout} second timeout waiting for MCU to reboot.")
 
         self.info("The MCU has rebooted.")
-
-    def _waitForPingSuccess(self, address, restartTimeout=60, pingHoldSecs = 3):
-        """@brief Wait for a reconnect to the WiFi network.
-           @param address The address of the MCU on the wiFi network.
-           @param restartTimeout The number of seconds before an exception is thrown if the WiFi does not reconnect.
-           @param pingHoldSecs The number of seconds of constant pings before we determine the WiFi has reconnected.
-                               This is required because the Pico W may ping and then stop pinging before pinging
-                               again when reconnecting to the Wifi."""
-        startT = time()
-        pingRestartTime = None
-        self.info("Waiting for the MCU to reconnect to the WiFi network.")
-        while True:
-            pingSec = self.doPing(address)
-            if pingSec is not None:
-                if pingRestartTime is None:
-                    pingRestartTime = time()
-
-                if time() > pingRestartTime+pingHoldSecs:
-                    break
-
-            else:
-                pingRestartTime = None
-
-            if time() >= startT+restartTimeout:
-                raise Exception(f"Timeout waiting for {address} to become pingable.")
-
-            sleep(0.25)
-
-        self.info(f"{address} ping success.")
 
     def _checkRunningNewApp(self, address, restartTimeout=120):
         """@brief Check that the upgrade has been successful and the device is running the updated app.
