@@ -1274,6 +1274,9 @@ class GUIServerEXT1(GUIServer):
     def _startWifiSetup(self):
         """@brief Called to start the process of setting up the WiFi network."""
         if self._wifi_setup_radio.value == GUIServerEXT1.USB:
+            if self._is_serial_port_open():
+                ui.notify('The serial port is open in the SERIAL PORT tab. Close it and try again.', type='negative')
+                return
             self._usbWiFiDialog1.open()
 
         elif self._wifi_setup_radio.value == GUIServerEXT1.BLUETOOTH:
