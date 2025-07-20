@@ -1628,7 +1628,9 @@ class UpgradeManager(LoaderBase):
             localSHA256 = hashlib.sha256(encodedData).hexdigest()
 
         fileName = os.path.basename(localFile)
-        destFile = os.path.join(destPath, fileName)
+        # We don't use os.path.join() here as we want to use the / separator 
+        # regardless of the platform we are runing on.
+        destFile = destPath + '/' + fileName
 
         self.debug(f"Sending {localFile} to {address}:{destFile} (size={fSize} bytes).")
         url = f"http://{address}:80/upload"
