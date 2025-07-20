@@ -257,6 +257,7 @@ class LoaderBase(MCUBase):
         self._ser = None
         self._tempFolder = LoaderBase.GetTempFolder()
         self._appRootFolder = None
+        self._mpDescripLine = None
 
     def _isPico(self):
         pico=False
@@ -359,11 +360,12 @@ class LoaderBase(MCUBase):
         if not correct:
             raise Exception(f"Incorrect MCU type. A {self._mcu} MCU is not connected via a USB cable.")
 
-    def _checkMicroPython(self, closeSerialPort=True, timeoutSeconds=30, checkMCUCorrect=False):
+    def _checkMicroPython(self, closeSerialPort=True, timeoutSeconds=30, checkMCUCorrect=False, forceESP32Reset=False):
         """@brief Check micropython is loaded onto the MCU connected vis USB.
            @param closeSerialPort If True then close the serial port on exit.
            @param timeoutSeconds Seconds to wait before timeout.
            @param checkMCUCorrect If True ensure the configured MCU type is correct.
+           @param forceESP32Reset If True an attempt is made to reset an ESP32 using DTR/RTS even if not previously detected.
            @return The MicroPython description line returned in response to CTRL sent on the serial port or None."""
         mpDescripLine = None
         self.debug("_checkMicroPython(): START")
@@ -374,7 +376,14 @@ class LoaderBase(MCUBase):
                 self.openFirstSerialPort()
                 if self._serialPort:
                     self.info(f"Found USB port: {self._serialPort}")
-                timeToSend = time()+1
+
+                # If an esp32 is connected then we reset the MCU every time we check for the MicroPython
+                # prompt. This is because when the serial port is closed it can cause the original ESP32
+                # MCU to enter download mode.
+                if self._isEsp32Connected() or forceESP32Reset:
+                    LoaderBase.ResetESP32(self._uio, self._ser)
+
+                timeToSend = time()+3
                 self.info(f"Checking for MCU MicroPython prompt ({timeoutSeconds} second timeout)...")
                 while True:
                     self.debug(".")
@@ -387,8 +396,8 @@ class LoaderBase(MCUBase):
                         else:
                             self._ser.write(b"\03")
                             self.debug("Sent CTRL C")
-                        # Send every 2 seconds
-                        timeToSend = now+2
+                        # Send every 0.5 seconds
+                        timeToSend = now + 0.5
 
                     elif self._ser.in_waiting > 0:
                         # Read the data that's arrived so
@@ -432,12 +441,24 @@ class LoaderBase(MCUBase):
                 self._closeSerialPort()
 
         self.debug("_checkMicroPython(): STOP")
+        self._mpDescripLine = mpDescripLine
         return mpDescripLine
 
-    def esp32HWReset(self, ser=None):
+    def _isEsp32Connected(self):
+        """@brief Determine if an esp32 (any type) is connected.
+           @return True if an esp32 is connected."""
+        esp32 = False
+        # The self._mpDescripLine var is set when _checkMicroPython() is called
+        if self._mpDescripLine and self._mpDescripLine.find('ESP32') != -1:
+            esp32 = True
+        return esp32
+
+    def esp32HWReset(self, ser=None, closeSer=True):
         """@brief Perform a reset on an ESP32 device.
            @param ser A ref to an open serial port. If None then the first available serial port is used.
-                  The ESP32 MCU reset is connected to the RTs control signal. We use this to assert the reset and release it."""
+                  The ESP32 MCU reset is connected to the RTs control signal. We use this to assert the reset and release it.
+           @param closeSer If True then close the serial port before returning.
+           @return The open serial port instance or None if closeSer = True"""
         try:
             if ser is None:
                 ser = self.openFirstSerialPort()
@@ -446,9 +467,11 @@ class LoaderBase(MCUBase):
             sleep(1)
 
         finally:
-            if ser:
+            if closeSer and ser:
                 ser.close()
                 ser = None
+
+        return ser
 
     def _closeSerialPort(self):
         """@brief Close the serial port if it's open."""
@@ -1008,7 +1031,7 @@ class USBLoader(LoaderBase):
            @param args The argument list for the esptool command."""
         error = True
         try:
-            self.debug(f"EXECUTING: {str(args)}")
+            self.debug(f"EXECUTING: {" ".join(args)}")
             # Save original argv to restore later
             original_argv = sys.argv
             sys.argv = args
@@ -1162,13 +1185,6 @@ class USBLoader(LoaderBase):
         self.info(f"Loaded App to MCU ({self._mcuType})")
         return vfsStats
 
-    def resetEsp32(self):
-        """@brief Perform a reset on an ESP32 device.
-                  The ESP32 MCU reset is connected to the RTs control signal. We use this to assert the reset and release it.
-                  The serial port connected to an ESP32 device must be connected and openFirstSerialPort() must have been
-                  called prior to calling this method leaving the serial port open."""
-        USBLoader.ResetESP32(self._uio, self._ser)
-
     def viewSerialOut(self):
         """@brief View serial port output. This is useful on a RPi Pico W as when the Pico
          is reset the serial port is lost. This will show the output as the port re appears.
@@ -1193,15 +1209,6 @@ class USBLoader(LoaderBase):
             finally:
                 self._closeSerialPort()
 
-    def _isEsp32Connected(self, line):
-        """@brief Determine if an esp32 (any type) is connected.
-           @param line The line of text returned from _checkMicroPython().
-           @return True if an esp32 is connected."""
-        esp32 = False
-        if line.find('ESP32') != -1:
-            esp32 = True
-        return esp32
-
     def setupWiFi(self, ssid, password):
         """@brief Update the WiFi config on the MCU device using the USB port to ensure it will connect to the wiFi
                   network when the software is started.
@@ -1209,9 +1216,11 @@ class USBLoader(LoaderBase):
            @param password The WiFi password.
            @return the configured SSID"""
         try:
-            # Attempt to connect to the board under test python prompt
-            mpLine = self._checkMicroPython(closeSerialPort=False)
-            esp32 = self._isEsp32Connected(mpLine)
+            # Attempt to connect to the board under test python prompt.
+            # At this point we don't know if an esp32 is connected so we attempt to reset (using DTR/RTS) it anyway.
+            # If an RPi Pico W is connected then it ignores the state of these control signals.
+            self._checkMicroPython(closeSerialPort=False, forceESP32Reset=True)
+            esp32 = self._isEsp32Connected()
             thisMachineFileContents = LoaderBase.REPLGetFileContents(self._ser, LoaderBase.MACHINE_CONFIG_FILE)
             if thisMachineFileContents is None or thisMachineFileContents == '>>> ':
                 raise Exception(f"The MCU device does not have a {LoaderBase.MACHINE_CONFIG_FILE} file. This should be created when the MCU boots the first time running example Project 3 or later.")
