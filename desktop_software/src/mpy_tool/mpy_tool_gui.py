@@ -450,7 +450,7 @@ class GUIServer(TabbedNiceGui):
         pass
 
     def _setWiFiNetwork(self, wifiSSID, wifiPassword):
-        """@brief Set the Wifi network on a YDev device..
+        """@brief Set the Wifi network on a YDev device over a USB interface.
            @param wifiSSID The WiFi SSID to set.
            @param wifiPassword The WiFi password to set."""
         startT = time()
@@ -768,7 +768,8 @@ class GUIServer(TabbedNiceGui):
                                 # Ensure we don't spinlock
                                 sleep(0.1)
 
-                        except:
+                        except Exception as ex:
+                            self.error(str(ex))
                             pass
 
                     finally:
@@ -1510,7 +1511,7 @@ class GUIServerEXT1(GUIServer):
         self.updateGUI(msgDict)
 
     def _setupWiFi(self, wifiSSID, wifiPassword):
-        """@brief Setup the YDev WiFi interface. This must be called outside the GUI thread.
+        """@brief Setup the YDev WiFi interface over a USB interface. This must be called outside the GUI thread.
            @param wifiSSID The WiFi SSID to set.
            @param wifiPassword The WiFi password to set."""
         try:
