@@ -1311,14 +1311,16 @@ class GUIServerEXT1(GUIServer):
         self._initTask()
         self._copyWifiParams(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)
         self._saveConfig()
-        self._setExpectedProgressMsgCount(22,86)
+        duration = 300
+        self._startProgress(durationSeconds=duration)
         threading.Thread( target=self._usbSetWiFiNetwork, args=(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)).start()
 
     def _startBluetoothWifiSetup(self):
         """@brief Start attempting to setup the YDev WiFi settings using a bluetooth connection to the YDev device."""
         self._initTask()
         self._saveConfig()
-        self._setExpectedProgressMsgCount(5, 10)
+        duration = 300
+        self._startProgress(durationSeconds=duration)
         threading.Thread(target=self._startBluetoothWifiSetupThread).start()
 
     def _startBluetoothWifiSetupThread(self):
