@@ -739,9 +739,10 @@ class GUIServer(TabbedNiceGui):
                     self.info(f"{mcuType} on {serialPort}")
                     usbLoader = USBLoader(mcuType, uio=self)
                     try:
-                        ser = usbLoader.openFirstSerialPort()
                         if resetESP32:
-                            LoaderBase.ResetESP32(self._uio, ser)
+                            ser = usbLoader.esp32HWReset(closeSer=False)
+                        else:
+                            ser = usbLoader.openFirstSerialPort()
 
                     except serial.serialutil.SerialException as ex:
                         if str(ex).find('Could not exclusively lock port'):
@@ -1393,12 +1394,24 @@ class GUIServerEXT1(GUIServer):
         self._setExpectedProgressMsgCount(9,20)
         threading.Thread( target=self._btSetWiFiNetworkThread, args=(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)).start()
 
+    def _waitForPingSuccess(self, address):
+        upgradeManager = UpgradeManager(self._mcuTypeSelect.value, uio=self)
+        upgradeManager._waitForPingSuccess(address)
+
     def _btSetWiFiNetworkThread(self, ssid, password):
         """@brief A worker thread responsible for configuring the YDev Wifi SSID and password over bluetooth.
            @param ssid The WiFi SSID.
            @param password The WiFi password."""
         waitingForIP = False
         try:
+            if not ssid:
+                self.error("WiFi ssid not set.")
+                return
+
+            if not password:
+                self.error("WiFi password not set.")
+                return
+
             ct6Address = self._btMacAddress
             yDevBlueTooth = YDevBlueTooth(uio=self)
             self.info("Setting up YDev WiFi...")
@@ -1408,25 +1421,29 @@ class GUIServerEXT1(GUIServer):
             yDevBlueTooth.waitfor_device(ct6Address)
             self.info("Waiting for YDev device WiFi to be served an IP address by the DHCP server...")
             ipAddress = yDevBlueTooth.get_ip(ct6Address)
-            waitingForIP = False
-            self.info(f"YDev device IP address = {ipAddress}")
-            # Send a message to set the YDev device IP address in the GUI
-            self._setYDevIPAddress(ipAddress)
-            self.info("Turning off bluetooth interface on YDev device.")
-            yDevBlueTooth.disable_bluetooth(ct6Address)
-            self.infoDialog("Device WiFi setup complete.")
+            if ct6Address:
+                waitingForIP = False
+                self.info(f"YDev device IP address = {ipAddress}")
+                # Send a message to set the YDev device IP address in the GUI
+                self._setYDevIPAddress(ipAddress)
+                self.info("Turning off bluetooth interface on YDev device.")
+                yDevBlueTooth.disable_bluetooth(ct6Address)
+                self.info("Device now restarting...")
+                sleep(2)
+                self._waitForPingSuccess(ipAddress)
+                self.infoDialog("Device WiFi setup complete.")
 
         except Exception as ex:
-            # Report a more useful user msg
-            if waitingForIP:
-                self.error(f"YDev device failed to connect to WiFi network ({ssid}). Check the ssid and password.")
-            else:
-                error = str(ex)
-                if error:
-                    self.error(error)
+            error = str(ex)
+            if error:
+                self.error(error)
 
         finally:
             self._sendEnableAllButtons(True)
+
+        # Report a more useful user msg
+        if waitingForIP:
+            self.error(f"YDev device failed to connect to WiFi network ({ssid}). Check the ssid and password.")
 
     def _copyYDevAddress(self, ipAddress):
         """@brief Copy same address to YDEV address on all tabs.
