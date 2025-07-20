@@ -302,9 +302,10 @@ class YDevBlueTooth(BlueTooth):
 
         return dev_found
 
-    async def _get_ip(self, address):
+    async def _get_ip(self, address, timeout=60):
         """@brief Get the IP address of the YDev device. This is only useful after setup_wifi() has been called.
            @param address The bluetooth address of the device.
+           @param timeout The number of seconds to wait for the IP address to be received.
            @return The IP address of the device."""
         ip_address = None
         try:
@@ -314,17 +315,28 @@ class YDevBlueTooth(BlueTooth):
                 await client.start_notify(YDevBlueTooth.NOTIFY_UUID, self._notification_handler)
                 self.debug(f"{inspect.currentframe().f_code.co_name}: started RX data notifier.")
 
-                data = YDevBlueTooth.GET_IP_CMD
-                await client.write_gatt_char(YDevBlueTooth.WRITE_CHAR_UUID, data, response=True)
-                self.debug(f"{inspect.currentframe().f_code.co_name}: Data written: {data}")
+                # Wait for an IP address of the device over a bluetooth connection.
+                timeout = time() + timeout
+                while True:
+                    try:
+                        data = YDevBlueTooth.GET_IP_CMD
+                        await client.write_gatt_char(YDevBlueTooth.WRITE_CHAR_UUID, data, response=True)
+                        self.debug(f"{inspect.currentframe().f_code.co_name}: Data written: {data}")
 
-                await self._waitfor_response(client)
+                        await self._waitfor_response(client)
 
-                if self._rx_list:
-                    line = self._rx_list[0].rstrip('\r\n')
-                    rx_dict = json.loads(line)
-                    if YDevBlueTooth.IP_ADDRESS in rx_dict:
-                        ip_address = rx_dict[YDevBlueTooth.IP_ADDRESS]
+                        if self._rx_list:
+                            line = self._rx_list[0].rstrip('\r\n')
+                            rx_dict = json.loads(line)
+                            if YDevBlueTooth.IP_ADDRESS in rx_dict:
+                                ip_address = rx_dict[YDevBlueTooth.IP_ADDRESS]
+                                break
+
+                        if time() >= timeout:
+                            raise Exception("Failed to get IP address over bluetooth.")
+
+                    except Exception as ex:
+                        print(str(ex))
 
         except Exception as e:
             self._set_exception(e)
