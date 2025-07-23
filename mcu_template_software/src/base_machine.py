@@ -97,24 +97,30 @@ class BaseMachine(UOBase):
 
         return gpio_pin
 
-    def _sta_connect_wifi(self, wifi_setup_gpio=-1, wifi_led_gpio=-1):
+    def _sta_connect_wifi(self, wifi_setup_gpio=-1, wifi_led_gpio=-1, bluetooth_led_gpio=-1):
         """@brief Connect to a WiFi network in STA mode.
-           @param wifi_setup_gpio The GPIO pin, connected to a switch that when held low for some time resets WiFi setup.
+           @param wifi_setup_gpio The GPIO pin connected to a switch that when held low for some time resets WiFi setup.
                                   See _get_wifi_setup_gpio() for more info.
-           @param wifi_led_gpio   The GPIO pin, connected to an LED that turns on when the WiFi is connected to the WiFi network as an STA.
+           @param wifi_led_gpio   The GPIO pin connected to an LED that turns on when the WiFi is connected to the WiFi network as an STA.
                                   See _get_wifi_led_gpio() for more info.
+           @param bluetooth_led_gpio The GPIO pin connected to an LED that indicates if bluetooth is enabled. Typically a blue LED.
            """
         wifi_led_gpio = self._get_wifi_led_gpio(override=wifi_led_gpio)
         wifi_setup_gpio = self._get_wifi_setup_gpio(override=wifi_setup_gpio)
-        self.info(f"WiFi LED GPIO:   {wifi_led_gpio}")
-        self.info(f"WiFi RESET GPIO: {wifi_setup_gpio}")
+        self.info(f"WiFi LED GPIO:      {wifi_led_gpio}")
+        self.info(f"WiFi RESET GPIO:    {wifi_setup_gpio}")
+        self.info(f"Bluetooth LED GPIO: {wifi_setup_gpio}")
         # Init the WiFi interface
         self._wifi = WiFi(self._uo,
                           wifi_led_gpio,
                           wifi_setup_gpio,
                           self._wdt,
                           self._machine_config,
-                          max_reg_wait_secs=BaseMachine.MAX_STA_WAIT_REG_SECONDS)
+                          max_reg_wait_secs=BaseMachine.MAX_STA_WAIT_REG_SECONDS,
+                          bluetooth_led_pin=bluetooth_led_gpio)
+        # Set the method to use to reset to factory defaults. This is called inside wifi
+        # if the user holds down the button while it's trying to connect to a wifi network
+        # when sta_connect() is called.
         self._wifi.set_factory_defaults_method(self.set_factory_defaults)
         self._wifi.sta_connect()
 

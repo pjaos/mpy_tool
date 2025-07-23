@@ -110,7 +110,8 @@ class WiFi(object):
                  wifi_button_pin,
                  wdt,
                  machine_config,
-                 max_reg_wait_secs=60):
+                 max_reg_wait_secs=60,
+                 bluetooth_led_pin=None):
         """@brief Constructor
            @param uo A UO instance.
            @param wifi_button_gpio The GPIO pin with a button to GND that is used to setup the WiFi.
@@ -120,6 +121,9 @@ class WiFi(object):
                              this should be set to the GPIO pin number with the LED
                              connected or left at -1 if only using the on board LED.
            @param max_reg_wait_secs The maximum time (seconds) to wait to register on the WiFi network.
+           @param bluetooth_led_pin If an LED is connected to indicate if bluetooth is enabled then
+                                    this should be set to the GPIO pin number with the LED connected.
+                                    This must be set to an integer >= 0 to be valid.
             """
         self._uo = uo
         self._wdt = wdt
@@ -130,6 +134,7 @@ class WiFi(object):
         self._wifi_button = None
         self._wifiButtonPressedTime = None
         self._max_reg_wait_secs = max_reg_wait_secs
+        self._bluetooth_led_pin = bluetooth_led_pin
         self._ip_address = None
         self._button_pressed_time = None
         self._factory_defaults_method = None
@@ -151,6 +156,12 @@ class WiFi(object):
 
         if self._wifi_button_pin >= 0:
             self._wifi_button = Pin(self._wifi_button_pin, Pin.IN, Pin.PULL_UP)
+
+        if self._bluetooth_led_pin == self._wifi_led_pin:
+            raise Exception(f"The bluetooth LED GPIO pin ({self._bluetooth_led_pin}) is the same as the WiFi LED GPIO pin ({self._wifi_led_pin})")
+
+        if self._bluetooth_led_pin == self._wifi_led_pin:
+            raise Exception(f"The bluetooth LED GPIO pin ({self._bluetooth_led_pin}) is the same as the WiFi button GPIO pin ({self._wifi_button_pin})")
 
         # Note that if initialised to an AP then the mac address would be different.
         self._wlan = network.WLAN(network.STA_IF)
@@ -249,7 +260,14 @@ class WiFi(object):
             # Import bluetooth here so that we don't have bluetooth in memory when a normal boot occurs
             # to save the ~ 37 KB of memory used by bluetooth
             from lib.bluetooth import BlueTooth
-            self._bluetooth = BlueTooth(self._get_bt_dev_name(), led_gpio=-1)
+            bt_led_pin = -1
+            try:
+                _bt_led_pin = int(self._bluetooth_led_pin)
+                if _bt_led_pin >= 0:
+                    bt_led_pin = _bt_led_pin
+            except:
+                pass
+            self._bluetooth = BlueTooth(self._get_bt_dev_name(), led_gpio=bt_led_pin)
             # We wait here until commands are received over bluetooth to setup WiFi.
             bt_shutdown = False
             while not bt_shutdown:
