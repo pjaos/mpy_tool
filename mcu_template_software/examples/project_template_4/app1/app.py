@@ -1,16 +1,28 @@
 # from machine import WDT
 
-import os
 import asyncio
-from time import time, sleep
+from time import time
 
-from lib.uo import UO, UOBase
+from lib.uo import UO
 from lib.config import MachineConfig
-from lib.wifi import WiFi
-from lib.hardware import Hardware
+from lib.base_machine import BaseMachine
 
 SHOW_MESSAGES_ON_STDOUT = True  # Turning this off will stop messages being sent on the serial port and will reduce CPU usage.
 WDT_TIMEOUT_MSECS = 8300        # Note that 8388 is the max WD timeout value on pico W hardware.
+
+
+class ThisMachineConfig(MachineConfig):
+    """@brief Defines the config specific to this machine."""
+
+    # Note that
+    # MachineConfig.RUNNING_APP_KEY and
+    # MachineConfig.WIFI_KEY will added automatically so we only need
+    # to define keys that are specific to this machine type here.
+
+    DEFAULT_CONFIG = {}
+
+    def __init__(self):
+        super().__init__(ThisMachineConfig.DEFAULT_CONFIG)
 
 
 async def start(runningAppKey, configFilename):
@@ -36,169 +48,23 @@ async def start(runningAppKey, configFilename):
     else:
         uo = None
 
-    this_machine = ThisMachine(uo)
+    machine_config = ThisMachineConfig()
+    this_machine = ThisMachine(uo, machine_config)
     this_machine.start()
-
-
-class ThisMachineConfig(MachineConfig):
-    """@brief Defines the config specific to this machine."""
-
-    # Note that
-    # MachineConfig.RUNNING_APP_KEY and
-    # MachineConfig.WIFI_KEY will added automatically so we only need
-    # to define keys that are specific to this machine type here.
-
-    DEFAULT_CONFIG = {}
-
-    def __init__(self):
-        super().__init__(ThisMachineConfig.DEFAULT_CONFIG)
-
-
-class BaseMachine(UOBase):
-
-    def __init__(self, uo):
-        super().__init__(uo)
-        self._wdt = None
-
-    def _init(self):
-        self._machine_config = ThisMachineConfig()
-
-    def pat_wdt(self):
-        if self._wdt:
-            self._wdt.feed()
-
-    def _get_wifi_setup_gpio(self, override=-1):
-        """@brief get the GPIO pin used to setup the WiFi GPIO.
-           @param wifi_setup_gpio_override. By default this is set to -1 which sets the following defaults.
-                  GPIO 0 on an esp32 (original) MCU.
-                  GPIO 9 on an esp32-c3 or esp32-c6 MCU.
-                  GPIO 14 on a RPi Pico W or RPi Pico 2 W MCU.
-           @return The GPIO pin to use."""
-        mcu = os.uname().machine
-        self.debug(f"MCU: {mcu}")
-        gpio_pin = -1
-        if override >= 0:
-            # TODO: Add checks here to check that it's a valid GPIO for the MCU
-            gpio_pin = override
-
-        else:
-            # !!!
-            # Currently MicroPython for the ESP32C6 is under development and the
-            # image of MicroPython in this tool returns ESP32
-            # rather than ESP32C6 for esp32c6 HW.
-            if 'ESP32C6' in mcu:
-                gpio_pin = 9
-
-            elif 'ESP32C3' in mcu:
-                gpio_pin = 9
-
-            elif 'ESP32' in mcu:
-                gpio_pin = 0
-
-            elif 'RP2040' in mcu or 'RP2350' in mcu:
-                gpio_pin = 14
-
-            else:
-                raise Exception(f"Unsupported MCU: {mcu}")
-
-        return gpio_pin
-
-    def _get_wifi_led_gpio(self, override=-1):
-        """@brief get the GPIO pin connected connected to an LED that turns on when the WiFi
-                  is connected to the WiFi network as an STA.
-           @param wifi_setup_gpio_override. By default this is set to -1 which sets the following defaults.
-                  GPIO 2 on an esp32 (original) MCU.
-                  GPIO 8 on an esp32-c3 or esp32-c6 MCU.
-                  GPIO 16 on a RPi Pico W or RPi Pico 2 W MCU.
-           @return The GPIO pin to use."""
-        mcu = os.uname().machine
-        self.debug(f"MCU: {mcu}")
-        gpio_pin = -1
-        if override >= 0:
-            # TODO: Add checks here to check that it's a valid GPIO for the MCU
-            gpio_pin = override
-
-        else:
-            # !!!
-            # Currently MicroPython for the ESP32C6 is under development and the
-            # image of MicroPython in this tool returns ESP32
-            # rather than ESP32C6 for esp32c6 HW.
-            if 'ESP32C6' in mcu:
-                gpio_pin = 8
-
-            elif 'ESP32C3' in mcu:
-                gpio_pin = 8
-
-            elif 'ESP32' in mcu:
-                gpio_pin = 2
-
-            elif 'RP2040' in mcu or 'RP2350' in mcu:
-                gpio_pin = 16
-
-            else:
-                raise Exception(f"Unsupported MCU: {mcu}")
-
-        return gpio_pin
-
-    def _sta_connect_wifi(self, wifi_setup_gpio=-1, wifi_led_gpio=-1):
-        """@brief Connect to a WiFi network in STA mode.
-           @param wifi_setup_gpio The GPIO pin, connected to a switch that when held low for some time resets WiFi setup.
-                                  See _get_wifi_setup_gpio() for more info.
-           @param wifi_led_gpio   The GPIO pin, connected to an LED that turns on when the WiFi is connected to the WiFi network as an STA.
-                                  See _get_wifi_led_gpio() for more info.
-           """
-        wifi_led_gpio = self._get_wifi_led_gpio(override=wifi_led_gpio)
-        wifi_setup_gpio = self._get_wifi_setup_gpio(override=wifi_setup_gpio)
-        self.info(f"WiFi LED GPIO:   {wifi_led_gpio}")
-        self.info(f"WiFi RESET GPIO: {wifi_setup_gpio}")
-        # Init the WiFi interface
-        self._wifi = WiFi(self._uo,
-                          wifi_led_gpio,
-                          wifi_setup_gpio,
-                          self._wdt,
-                          self._machine_config,
-                          max_reg_wait_secs=ThisMachine.MAX_STA_WAIT_REG_SECONDS)
-        self._wifi.sta_connect()
-
-    def set_factory_defaults(self):
-        """@brief reset the config to factory defaults."""
-        self._machine_config.set_defaults()
-        self._machine_config.store()
-        self.warn("Resetting to factory defaults.")
-        # Ensure the file system is synced before we reboot.
-        os.sync()
-        Hardware.Reboot(uo=self._uo)
-        while True:
-            sleep(1)
 
 
 class ThisMachine(BaseMachine):
     """@brief Implement functionality required by this project."""
 
-    DEFAULT_CONFIG = {}
-
-    # This value must be less than the WDT_TIMEOUT_MSECS if the WDT is enabled.
-    SERVICE_LOOP_MILLISECONDS = 200
-    # The MAX time to wait for an STA to register.
-    # After this time has elapsed the unit will either reboot
-    # or if the hardware has the capability, power cycle itself.
-    MAX_STA_WAIT_REG_SECONDS = 60
-
-    def __init__(self, uo):
-        super().__init__(uo)
+    def __init__(self, uo, machine_config):
+        super().__init__(uo, machine_config)
         self._startTime = time()
-
-        # Initialise this machine
-        self._init()
-
-    def _init(self):
-        super()._init()
 
         # Enable watchdog timer here if required.
         # If the WiFi goes down then we can
         # drop out to the REPL prompt.
         # The WDT will then trigger a reboot.
-    #        self._wdt = WDT(timeout=WDT_TIMEOUT_MSECS)
+        # self._wdt = WDT(timeout=WDT_TIMEOUT_MSECS)
 
     async def _updateTemp(self, paramDict):
         """@brief Example code to update the temperature and humidity.
@@ -226,6 +92,15 @@ class ThisMachine(BaseMachine):
         # Note that the WiFi setup claims two GPIO pins. See _sta_connect_wifi doc for more info.
         self._sta_connect_wifi()
 
+        # Start task that looks for user press of the reset to defaults button press
+        asyncio.create_task(self._check_factory_Defaults_task())
+
+        # Call the app task to execute your projects functionality.
+        asyncio.create_task(self.app_task())
+
+        # Run the web server. This is used for upgrades and also to present
+        # a local webserver to allow users to interact with the device.
+        # In this case it displays dummy temperatures.
         from lib.webserver import WebServer
         web_server = WebServer(self._machine_config,
                                self._startTime,
@@ -234,4 +109,13 @@ class ThisMachine(BaseMachine):
         asyncio.create_task(self._updateTemp(paramDict))
         web_server.setParamDict(paramDict)
         web_server.run()
+
+    async def app_task(self):
+        """@brief Add your project code here. 
+                  Make sure await asyncio.sleep(1) is called frequently to ensure other tasks get CPU time."""
+        count = 0
+        while True:
+            print(f"app_task(): count = {count}")
+            await asyncio.sleep(1)
+            count += 1
 
