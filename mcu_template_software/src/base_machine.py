@@ -97,19 +97,20 @@ class BaseMachine(UOBase):
 
         return gpio_pin
 
-    def _sta_connect_wifi(self, wifi_setup_gpio=-1, wifi_led_gpio=-1, bluetooth_led_gpio=-1):
+    def _sta_connect_wifi(self, wifi_setup_gpio=-1, wifi_led_gpio=-1, bluetooth_led_gpio=None):
         """@brief Connect to a WiFi network in STA mode.
            @param wifi_setup_gpio The GPIO pin connected to a switch that when held low for some time resets WiFi setup.
                                   See _get_wifi_setup_gpio() for more info.
            @param wifi_led_gpio   The GPIO pin connected to an LED that turns on when the WiFi is connected to the WiFi network as an STA.
                                   See _get_wifi_led_gpio() for more info.
            @param bluetooth_led_gpio The GPIO pin connected to an LED that indicates if bluetooth is enabled. Typically a blue LED.
+                                     If defined this led will flash when bluetooth is enabled and turn ON when a bluetooth client is connected.  
            """
         wifi_led_gpio = self._get_wifi_led_gpio(override=wifi_led_gpio)
         wifi_setup_gpio = self._get_wifi_setup_gpio(override=wifi_setup_gpio)
         self.info(f"WiFi LED GPIO:      {wifi_led_gpio}")
         self.info(f"WiFi RESET GPIO:    {wifi_setup_gpio}")
-        self.info(f"Bluetooth LED GPIO: {wifi_setup_gpio}")
+        self.info(f"Bluetooth LED GPIO: {bluetooth_led_gpio}")
         # Init the WiFi interface
         self._wifi = WiFi(self._uo,
                           wifi_led_gpio,
