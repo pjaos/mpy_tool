@@ -746,7 +746,7 @@ class GUIServer(TabbedNiceGui):
 
                     except serial.serialutil.SerialException as ex:
                         if str(ex).find('Could not exclusively lock port'):
-                            self.error("It appears the serial port is in use by another program.")
+                            self.error("It appears the serial port is in use.")
                         else:
                             self.error(str(ex))
                         return
