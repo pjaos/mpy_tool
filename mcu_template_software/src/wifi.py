@@ -132,6 +132,7 @@ class WiFi(object):
         self._max_reg_wait_secs = max_reg_wait_secs
         self._ip_address = None
         self._button_pressed_time = None
+        self._factory_defaults_method = None
         self._init()
 
     def info(self, msg):
@@ -164,12 +165,13 @@ class WiFi(object):
         factory_reset_required = False
         # If button is pressed
         if self._wifi_button.value() == 0:
-            # IF this is the first time the button press was detected
+            # If this is the first time the button press was detected
             if self._button_pressed_time is None:
                 # Record the time it was pressed
                 self._button_pressed_time = time()
             else:
                 elapsed_seconds = time() - self._button_pressed_time
+                self.debug(f"Factory reset button pressed for {elapsed_seconds} seconds.")
                 if elapsed_seconds >= WiFi.FACTORY_RESET_BUTTON_SECS:
                     factory_reset_required = True
 
@@ -186,18 +188,33 @@ class WiFi(object):
         self._wlan.active(True)
         self._wlan.connect(ssid, password)
         start_t = time()
+        led_flash_time = time() + 2
         while True:
             wifi_status = self._wlan.status()
             self._uo.debug("wifi_status={}".format(wifi_status))
             if self._wlan.isconnected():
                 break
 
+            # If the WiFi won't connect the user can hold down the WiFi button to reset to defaults
+            # so that they can try setting up the WiFi again.
+            elif self._factory_defaults_method and self.is_factory_reset_required():
+                self.debug("Reset to factory defaults.")
+                self._factory_defaults_method()
+
             # If we were not able to connect to a WiFi network return None
             elif time() >= start_t+self._max_reg_wait_secs:
                 return None
 
-            sleep(0.5)
+            sleep(0.1)
             self._pat_wdt()
+
+            # We flash the Wifi LED on for about 100 MS every 2 seconds if attempting to connect to 
+            # a WiFi network in order to give the user some feedback.
+            if time() >= led_flash_time:
+                self._wifi_led.value(True)
+                led_flash_time = time() + 2
+            else:
+                self._wifi_led.value(False)
 
         self._uo.debug('connected')
         status = self._wlan.ifconfig()
@@ -339,3 +356,9 @@ class WiFi(object):
                     Hardware.Reboot(uo=self._uo)
                     while True:
                         sleep(1)
+
+    def set_factory_defaults_method(self, factory_defaults_method):
+        """@brief Set the method to be called to reset the config to factory defaults.
+           @param factory_defaults_method The method reference."""
+        self._factory_defaults_method = factory_defaults_method
+
