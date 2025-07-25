@@ -1,43 +1,72 @@
 # Example Project 5
 
-Template project
+This example includes the ability to setup WiFi over bluetooth. It also includes a webserver (microdot)
+that allows applications to be upgraded over the WiFi interface. It also supports device discovery over the 
+WiFi network.
 
-- With WiFi that can be setup via bluetooth
-- Start the microdot webserver.
-- A YDev broadcast message listener. This listens for YDev are you
-  there (AYT) messages and responds with JSON stats data.
-
-Add project code to app1/app.py file ThisMachine.start() method.
-
-Once loaded the WIFI tab in mpy_tool_gui can be used to setup the WiFi.
-The message log from mpy_tool_gui when setting up the WiFi over bluetooth is shown below
+The message log from mpy_tool_gui (SERIAL PORT tab) when starting the app when it's connected to a WiFi network.
+When connected to a WiFi network an incrementing count is printed.
 
 ```
-INFO:  Scanning for YDev devices via bluetooth...
-INFO:  Detected YDev unit (address = 28:37:2F:54:28:B6).
-INFO:  YDev unit is now performing a WiFi network scan...
-INFO:  WiFi Network                             RSSI (dBm)
-INFO:  airstorm11-Guest                         -85
-INFO:  airstorm11                               -86
-INFO:  Setting up YDev WiFi...
-INFO:  Waiting for YDev device to restart...
-INFO:  Waiting for YDev device WiFi to be served an IP address by the DHCP server...
-INFO:  YDev device IP address = X.X.X.X
-INFO:  Turning off bluetooth interface on YDev device.
-INFO:  Device WiFi setup complete.
+MPY: soft reboot
+DEBUG: active_app=1
+INFO:  /dev/ttyACM0: INFO:  Started app
+INFO:  Running app1
+INFO:  Total RAM (bytes) 205440, Free 157968, Used 47472, uptime 0
+DEBUG: MCU: Raspberry Pi Pico W with RP2040
+DEBUG: MCU: Raspberry Pi Pico W with RP2040
+INFO:  WiFi LED GPIO:      16
+INFO:  WiFi RESET GPIO:    14
+INFO:  Bluetooth LED GPIO: None
+DEBUG: wifi_status=3
+DEBUG: connected
+INFO:  IP Address=X.X.X.X
+INFO:  /dev/ttyACM0: app_task(): count = 0
+Starting async server on 0.0.0.0:80...
+INFO:  /dev/ttyACM0: app_task(): count = 1
+INFO:  /dev/ttyACM0: app_task(): count = 2
 ```
 
 If you open a web browser and connect to http://<MCU IP ADDRESS>:80
-you should receive.
+you should receive. The numbers presented are dummy and will change
+with each page reload.
 
 '''
-Microdot Example Page
-Hello from Microdot!
+Sensor Data
 
-Click to shutdown the server
+Temperature: 24.306 °C
+
+Humidity: 60.344 %
 '''
 
-If the mpy_tool_gui SCAN tab is used to send YDEV broadcast messages when a device is running this example code it will respond with JSON messages as shown below in the messages window.
+
+## Supported mpy_tool_gui functionality.
+
+- The INSTALL tab can be used to load code onto an MCU.
+- The WiFi tab can be used to setup the WiFi interface via USB or bluetooth connections.
+- OTA (OVER THE AIR) tab UPGRADE and RESET WIFI CONFIGURATION buttons.
+- SERIAL PORT tab can be used to view and send data on the serial port.
+- SCAN tab can be used to discover connected devices on the network.
+- MEMORY MONITOR tab can be used to monitor RAM and disk usage.
+
+If you wish to add code for your project you should update the ThisMachine class app_task() method in the app1/app.py. This method is shown below.
+
+
+```
+class ThisMachine(BaseMachine):
+...
+    async def app_task(self):
+        """@brief Add your project code here. 
+                  Make sure await asyncio.sleep(1) is called frequently to ensure other tasks get CPU time."""
+        count = 0
+        while True:
+            print(f"app_task(): count = {count}")
+            await asyncio.sleep(1)
+            count += 1
+```
+
+## Scan tool
+If the SCAN button is selected in the mpu_tool_gui SCAN tab the following can be produced.
 
 ```
 INFO:  Sending AYT messages every second.
@@ -48,7 +77,7 @@ INFO:  {
     "UNIT_NAME": "DEV_NAME",
     "PRODUCT_ID": "PRODUCT_ID",
     "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
+    "IP_ADDRESS": "192.168.0.16",
     "GROUP_NAME": ""
 }
 INFO:  {
@@ -57,35 +86,14 @@ INFO:  {
     "UNIT_NAME": "DEV_NAME",
     "PRODUCT_ID": "PRODUCT_ID",
     "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
+    "IP_ADDRESS": "192.168.0.18",
     "GROUP_NAME": ""
 }
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  {
-    "OS": "MicroPython",
-    "DEVICE_TYPE": "DEV_TYPE",
-    "UNIT_NAME": "DEV_NAME",
-    "PRODUCT_ID": "PRODUCT_ID",
-    "SERVICE_LIST": "web:80",
-    "IP_ADDRESS": "192.168.0.57",
-    "GROUP_NAME": ""
-}
-INFO:  Scan complete.
 ```
+
+These parameters can be set in your code for your product type.
+
+
+
+
+

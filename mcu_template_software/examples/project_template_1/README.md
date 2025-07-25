@@ -1,8 +1,8 @@
 # Example Project 1
 
-Project template is the simplest example.
+This is the most basic example.
 
-It simply runs a loop that prints out an incrementing count.
+It runs a loop that prints out an incrementing count.
 
 When started it shows the incrementing count on the serial port as shown below.
 
@@ -22,4 +22,23 @@ INFO:  /dev/ttyUSB0: Running: 12
 INFO:  /dev/ttyUSB0: Running: 13
 INFO:  /dev/ttyUSB0: Running: 14
 INFO:  /dev/ttyUSB0: Running: 15
+```
+
+## Supported mpy_tool_gui functionality.
+- The INSTALL tab can be used to load code onto an MCU.
+- SERIAL PORT tab can be used to view and send data on the serial port.
+
+If you wish to use this project the current main.py file can be changed from that detailed below.
+
+```
+import time
+
+try:
+    count = 0
+    while True:
+        print(f"Running: {count}")
+        time.sleep(0.1)
+        count+=1
+except KeyboardInterrupt:
+    print("Interrupted!")
 ```
