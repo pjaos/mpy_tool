@@ -27,9 +27,12 @@ INFO:  /dev/ttyACM0: app_task(): count = 1
 INFO:  /dev/ttyACM0: app_task(): count = 2
 ```
 
-If you open a web browser and connect to http://<MCU IP ADDRESS>:80
-you should receive. The numbers presented are dummy and will change
-with each page reload.
+You can update the html file in the assets folder 
+to present the web page that you wish. Other files (css, javascript etc) 
+can be added to the assets folder if required. The _updateContent()
+method in the WebServer class (lib/webserver.py) updates the values on the 
+web page/s after they are read from flash memory and before they are served 
+to the clients web browser.
 
 '''
 Sensor Data
@@ -64,6 +67,10 @@ class ThisMachine(BaseMachine):
             await asyncio.sleep(1)
             count += 1
 ```
+
+You may want to modify the above code for your projects functionality to read some values from sensors. These values can be used to update values in a dictionary.
+The setParamDict() method on the WebServer class (lib/webserver.py) should be used to pass a reference to this dictionary which is 
+then used by the WebServer class to update the values on the webpage served to the client.
 
 ## Scan tool
 If the SCAN button is selected in the mpu_tool_gui SCAN tab the following can be produced.
