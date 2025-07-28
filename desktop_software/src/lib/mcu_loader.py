@@ -1236,14 +1236,16 @@ class USBLoader(LoaderBase):
             # bluetooth enabled key is -1 for Ydev devices
             thisMachineDict["-1"] = 1
             # The machine config file sitting the the local temp folder.
-            localMachineCfgFile = os.path.join(self._tempFolder, LoaderBase.MACHINE_CONFIG_FILE)
+            localMachineCfgFile = os.path.join(self._tempFolder, LoaderBase.MACHINE_CONFIG_FILE + '.' + str( int(random()*1E6) ))
             LoaderBase.SaveDictToJSONFile(thisMachineDict, localMachineCfgFile, uio=self._uio)
 
         finally:
             self._closeSerialPort()
         localMachineCfgFile = USBLoader.GetRShellPath(localMachineCfgFile)
         # Copy the machine config file back to the MCU flash
-        self._runRShell((f'cp "{localMachineCfgFile}" /pyboard/',) )
+        self._runRShell((f'cp "{localMachineCfgFile}" /pyboard/{LoaderBase.MACHINE_CONFIG_FILE}',) )
+        # Clean up the tmp file
+        os.remove(localMachineCfgFile)
         return self._runApp(esp32)
 
     def _runApp(self, esp32, waitForIPAddress=True, timeoutSec=60):
