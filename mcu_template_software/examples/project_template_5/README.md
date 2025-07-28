@@ -101,6 +101,8 @@ INFO:  {
 These parameters can be set in your code for your product type.
 
 
+## Details of WiFi setup functionality
 
+The example code includes the allocation of two GPIO pins on the MCU, one connected to an LED and one connected to a button.
 
-
+See [WIFI_SETUP_GPIOS.md](../project_template_4/WIFI_SETUP_GPIOS.md) for details of this.

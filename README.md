@@ -191,18 +191,21 @@ The following example applications are provided as the starting point for implem
 Minimal example. Click [here](mcu_template_software/examples/project_template_1/README.md) for more info.
 
 - Example 2
-As above but with the ability to setup the WiFi over USB or Bluetooth interface. Click [here](mcu_template_software/examples/project_template_2/README.md) for more info.
+As above but with the ability to switch between app1 and app2. Click [here](mcu_template_software/examples/project_template_2/README.md) for more info.
 
 - Example 3
-As above but with a webserver. Click [here](mcu_template_software/examples/project_template_3/README.md) for more info.
+As above but with the ability to setup the WiFi over USB or Bluetooth interface. Click [here](mcu_template_software/examples/project_template_3/README.md) for more info.
 
 - Example 4
-As above but with the ability to respond to are you there broadcast messages with stats in JSON format. Click [here](mcu_template_software/examples/project_template_4/README.md) for more info.
+As above but with a webserver. Click [here](mcu_template_software/examples/project_template_4/README.md) for more info.
+
+- Example 5
+As above but with the ability to respond to are you there broadcast messages with stats in JSON format. Click [here](mcu_template_software/examples/project_template_5/README.md) for more info.
 
 
+## Installing software onto a new MCU
 
-
-For the example below example 3 code is installed onto a RPi Pico 2 W (the latest Raspberry Pi Pico hardware).
+For the example below, example 3, code is installed onto a RPi Pico 2 W (the latest Raspberry Pi Pico hardware).
 
 - Select the MCU Type ('RPi Pico 2 W' in this case).
 - Plug in a USB cable between the PC running the mpy_tool_gui software (GUI) and the RPi Pico 2 W.
@@ -217,18 +220,250 @@ For the example below example 3 code is installed onto a RPi Pico 2 W (the lates
 ![alt text](images/install_main.py_selected.png "Example 3 main.py Selected")
 
 - The four options (blue switch widgets) available should all be selected initially. Once MicroPython has
-been loaded the first two (from the left) can be switch off unless you wish to Wipe the MCU flash and
+been loaded the first two (from the left) can be switch off unless you wish to wipe the MCU flash and
 reload MicroPython to it.
 - Select the 'INSTALL SW' button to load the MCU. You are then prompted as shown below.
 
 ![alt text](images/install_2.png "")
 
-- At this point remove the USB connected from the 'RPi Pico 2 W', hold the button down on the 'RPi Pico 2 W' and plug the USB connector back in (while holding the button down). This causes the 'RPi Pico 2 W' flash to be mounted as a drive.
+- At this point remove the USB connector from the 'RPi Pico 2 W', hold the button down on the 'RPi Pico 2 W' and reconnect it (while holding the button down). This causes the 'RPi Pico 2 W' flash to be mounted as a drive.
 - Select the OK button to continue.
 
-The MCU installation process should now continue. An example of the text displayed in the Message Log window is shown below.
+The MCU installation process should now continue. When complete the Message Log window should show.
+
+![alt text](images/install_complete.png "")
+
+## Setting up WiFi
+
+You must have previously loaded project_template_3 or higher the setup the WiFi using the SETUP WIFI option in the WIFI tab. Once configured, when the MCU boots it will attempt to connect to the WiFi network.
+
+### Setting up WiFi using a USB connection.
+
+- Select the USB radio button
+- Select the SETUP WIFI button
+
+![alt text](images/setup_wifi_usb_2.png "Setup WiFi using the USB conmnection")
+
+- Select the OK button
+
+The Wifi should then be setup. The message log window should show
 
 ```
+INFO:  Checking for a USB connected MCU.
+INFO:  MCU: RPi Pico 2 W.
+INFO:  Found USB port: /dev/ttyACM0
+INFO:  Asserting esp32 hardware reset.
+INFO:  Released esp32 hardware reset.
+INFO:  Checking for MCU MicroPython prompt (30 second timeout)...
+INFO:  MicroPython v1.26.0-preview.243.gcfcc53da7.dirty on 2025-06-16; Raspberry Pi Pico 2 W with RP2350
+INFO:  Running App on the MCU device. Waiting for WiFi connection...
+INFO:  Rebooting the MCU (RPi Pico 2 W)
+INFO:  Found USB port: /dev/ttyACM0
+INFO:  Checking for MCU MicroPython prompt (30 second timeout)...
+INFO:  MicroPython v1.26.0-preview.243.gcfcc53da7.dirty on 2025-06-16; Raspberry Pi Pico 2 W with RP2350
+INFO:  MCU IP address = X.X.X.X
+INFO:  WiFi is now configured on MCU.
+INFO:  Took 15.7 seconds.
+INFO:  WiFi setup complete.
+```
+
+You should then be able to ping the MCU on the IP address displayed.
+
+### Setting up WiFi using a Bluetooth connection.
+
+You must have bluetooth enabled on your machine to be able to configure the MCU WiFi interface via bluetooth.
+
+- Select the Bluetooth radio button
+- Select the SETUP WIFI button
+- A dialog box is displayed telling you to hold down the WiFi button on the MCU until the WiFi LED flashes. If you have just used the INSTALL tab to load software onto an MCU then it will be in this state, ready to setup the WiFi. 
+
+See the mcu_template_software/examples/project_template_4/README.md or mcu_template_software/examples/project_template_5/README.md files for details of the GPIO pins allocated for the WiFi button and the WiFi indicator LED.
+
+- When OK button is selected a scan for bluetooth devices is performed. When a connection is made to the MCU a command is sent to it instructing the MCU to perform a scan of the WiFi networks that it can see. When this is complete a list of the WiFi networks is displayed in the message log and a dialog is presented showing the SSID's found. You may select an SSID from this list and this will be copied to the 'WiFi SSID' field in the dialog. If you know the SSID of the network you wish to connect to but it is not displayed in the list of SSID's found (a hidden SSID) you may enter the WiFi SSID directly. Enter the WiFi password and then select the OK button in the dialog.
+
+- The WiFi SSID and password will then be sent to the MCU over the bluetooth connection and the MCU will restart.
+
+- When the MCU connects to the WiFi network it will show the following messages in the message log.
 
 ```
+INFO:  Setting up YDev WiFi...
+INFO:  Waiting for YDev device to restart...
+INFO:  Waiting for YDev device WiFi to be served an IP address by the DHCP server...
+INFO:  YDev device IP address = X.X.X.X
+INFO:  Turning off bluetooth interface on YDev device.
+INFO:  Device now restarting...
+INFO:  Waiting for the MCU to reconnect to the WiFi network.
+INFO:  X.X.X.X ping success.
+INFO:  Device WiFi setup complete.
+```
+
+You should then be able to ping the MCU on the IP address displayed.
+
+
+## Upgrading MicroPython App over the air.
+
+You must have previously loaded project_template_4 or project_template_5 to use the UPGRADE APP option in the 'OTA (OVER THE AIR)' tab.
+
+When the 'OTA (OVER THE AIR)' tab is selected the Device address must be entered as the Device address of the MCU to be upgraded.
+
+By default the 'Load *.mpy files to MCU flash' options is selected. When selected the python files (*.py) will be converted to python bytecode files (*.mpy) before being loaded. The python bytescode files are smaller and so take up less MCU flash space. If the 'Load *.mpy files to MCU flash' options is not selected then the python (*.py) files are loaded onto the MCU flash.
+
+You must select the main.py file in the project_template_4 or project_template_5 folder or modified versions of these for your project so that the code loaded to the MCU retains the ability to be upgraded over the air.
+
+Select the UPGRADE APP button and the all the files in the folder (all files including python files) in or under the main.py will be loaded onto the MCU over the air interface of the MCU.
+
+The message log should show messages similar to that below when the upgrade is complete
+
+```
+INFO:  Sent /home/auser/git-repos/mpy_tool/mcu_template_software/examples/project_template_4/app1/__init__.mpy to 192.168.0.80:/app1 (size=113 bytes)
+INFO:  Total size of all files loaded to the MCU: 123505 bytes.
+INFO:  App size (MB):        0.123505
+INFO:  Max app size (MB):    0.434176
+INFO:  Took 69.2 seconds to upgrade device.
+INFO:  Rebooting the device.
+INFO:  Waiting for the MCU (192.168.0.80) to reboot.
+INFO:  The MCU has rebooted.
+INFO:  Waiting for the MCU to reconnect to the WiFi network.
+INFO:  192.168.0.80 ping success.
+INFO:  Upgrade successful. Switched from /app2 to /app1
+INFO:  Flash size (MB):  0.868352
+INFO:  Used (MB):        0.401408
+INFO:  % space left:     53.8
+INFO:  Took 86.2 seconds.
+INFO:  Upgrade complete.
+```
+
+## Resetting the WiFi configuration
+
+### Via the app
+The mpy_tool_gui app allows you to reset the WiFi configuration if the MCU is currently connected to the WiFi network. 
+
+- Select the OTA (OVER THE AIR) tab
+- Enter the Device IP address 
+- Select the RESET WIFI CONFIGURATION button.
+
+The Message log should then show messages similar to those shown below
+
+```
+INFO:  Reset the WiFi config for the MCU at 192.168.0.80.
+INFO:  Reset MCU WiFi configuration..
+INFO:  Rebooting the device.
+INFO:  WiFi config has been reset and the MCU is rebooting.
+```
+
+Once rebooted its WiFi configuration is unset. You may then setup the WiFi configuration as detailed previously.
+
+### Via the WiFi button
+
+If you have a button connected to the WiFi GPIO pin (See [WIFI_SETUP_GPIOS.md](mcu_template_software/project_template_4/WIFI_SETUP_GPIOS.md) for details of this) then you can hold this button down for 5 seconds or so and the MCU should reset it's WiFi configuration and reboot. Once rebooted its WiFi configuration is unset. You may then setup the WiFi configuration as detailed previously.
+
+
+## Viewing MCU serial port output.
+
+The MCU sends information on it's serial port. When developing programs to run on the MCU it is useful to view this output. The SERIAL PORT tab allows you to do this.
+
+- Plug in your MCU to a USB port on the machine with the mpy_tol_gui app running.
+- Select the SERIAL PORT tab
+- Select the UPDATE SERIAL PORT LIST button
+- Ensure the 'MCU serial port' field has the serial port connected to the MCU selected.
+- Select the OPEN button.
+
+The serial port is not connected to the MCU, you should now see messages from the MCU.
+
+Once connected the CTRL C, CTRL B, CTRL D and SEND buttons are highlighted
+
+- CTRL C
+Sends an ASCII CTRL C character on the serial port which should stop the MCU running a program and return the python REPL prompt (>>> ).
+
+- CTRL B
+Sends an ASCII CTRL B character on the serial port which should return a line of text that reports details of MicroPython and the MCU it's running on assuming CTRL C was used to obtain the python REPL prompt.
+
+E.G
+
+```
+MicroPython v1.26.0-preview.243.gcfcc53da7.dirty on 2025-06-16; Raspberry Pi Pico W with RP2040
+```
+
+- CTRL D
+Sends an ASCII CTRL B character on the serial port which should attmpt to restart the program (run main.py) on the MCU flash.
+
+The following shows the program starting when the MCU has been loaded with project_template_5 and has it's WiFi interface configured.
+
+```
+MCU serial port
+HW Reset ESP32
+Text to send
+Message Log
+INFO:  /dev/ttyACM0: 
+MPY: soft reboot
+DEBUG: active_app=1
+INFO:  /dev/ttyACM0: INFO:  Started app
+INFO:  Running app1
+INFO:  Total RAM (bytes) 205440, Free 157968, Used 47472, uptime 0
+DEBUG: MCU: Raspberry Pi Pico W with RP2040
+INFO:  WiFi LED GPIO:      16
+INFO:  WiFi RESET GPIO:    14
+INFO:  Bluetooth LED GPIO: None
+DEBUG: wifi_status=3
+DEBUG: connected
+INFO:  IP Address=192.168.0.80
+INFO:  /dev/ttyACM0: app_task(): count = 0
+Starting async server on 0.0.0.0:80...
+INFO:  /dev/ttyACM0: app_task(): count = 1
+INFO:  /dev/ttyACM0: app_task(): count = 2
+```
+
+- CLOSE
+This will close the serial port. If you wish to use other tabs that use the serial port (E.G INSTALL) you will need to close the serial port so that it is available for use.
+
+## Scan for MCU's on the network
+
+The SCAN tab of the mpy_tool_gui app allows you to search for and receive stats from MCU's on the network if they have had project_template_5 loaded.
+
+- Select the SCAN tab
+- Select the Scan Port from the pulldown list. This should be set to YDEV:2934 if project_template_5 was loaded onto your MCU. CT6:29340 cam be used to read stats from CT6 devices. CT6 devices are energy monitoring devices. More information on CT6 devices can be found at https://github.com/pjaos/ct6_meter_os.
+- Enter the required Scan Period in seconds (1 second minimum).
+- You may optionally enter the IP address of a single unit if you only wish to see responses from a single unit.
+- Select the SCAN button.
+
+The example below shows the message log when a single MCU loaded with project_template_5 is connected to the WiFi network.
+
+```
+INFO:  Sending AYT messages every second.
+INFO:  Listening on UDP port 2934
+INFO:  {
+    "OS": "MicroPython",
+    "DEVICE_TYPE": "DEV_TYPE",
+    "UNIT_NAME": "DEV_NAME",
+    "PRODUCT_ID": "PRODUCT_ID",
+    "SERVICE_LIST": "web:80",
+    "IP_ADDRESS": "192.168.0.80",
+    "GROUP_NAME": ""
+}
+INFO:  Scan complete.
+```
+
+## Monitoring MCU memory
+
+It is possible to plot the memory usage while an MCU is running a program assuming it has a connected WiFi interface. Either project_template_4 or project_template_5 (or your project bases upon one of these) must be running on the MCU. To do this the mpy_tool_gui
+
+- Select the MEMORY MONITOR tab
+- Enter the MCU device IP address.
+- Enter the poll period for reading the memory stats.
+- Select the START button.
+
+A new browser window should open and it show the memory usage as shown below.
+
+![alt text](images/memory_montor.png "Memory Monitor")
+
+To stop the memory monitor select the STOP button at the top of the page. This stops the memory monitor. It does not stop the mpy_tool_gui app that created it.
+
+
+
+
+
+
+
+
+
 

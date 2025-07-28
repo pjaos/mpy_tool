@@ -73,3 +73,10 @@ class ThisMachine(BaseMachine):
 You may want to modify the above code for your projects functionality to read some values from sensors. These values can be used to update values in a dictionary.
 The setParamDict() method on the WebServer class (lib/webserver.py) should be used to pass a reference to this dictionary which is 
 then used by the WebServer class to update the values on the webpage served to the client.
+
+
+## Details of WiFi setup functionality
+
+The example code includes the allocation of two GPIO pins on the MCU, one connected to an LED and one connected to a button. 
+
+See [WIFI_SETUP_GPIOS.md](WIFI_SETUP_GPIOS.md) for details of this.
