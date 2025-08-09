@@ -6,20 +6,23 @@ import threading
 import serial
 import requests
 import datetime
+from random import random
+from subprocess import check_output
+from pathlib import Path
 
-from   time import time, sleep
-from queue import Queue
+from time import time, sleep
+from queue import Queue, Empty
 from p3lib.launcher import Launcher
 
-from   lib.mcu_loader import LoaderBase, USBLoader, UpgradeManager, YDevScanner, MCUBase
-from   lib.bluetooth import YDevBlueTooth
+from lib.mcu_loader import LoaderBase, USBLoader, UpgradeManager, YDevScanner, MCUBase
+from lib.bluetooth import YDevBlueTooth
 
-from   p3lib.uio import UIO
-from   p3lib.helper import logTraceBack
-from   p3lib.pconfig import ConfigManager
+from p3lib.uio import UIO
+from p3lib.helper import logTraceBack
+from p3lib.pconfig import ConfigManager
 
-from   p3lib.ngt import TabbedNiceGui, YesNoDialog, local_file_picker
-from   nicegui import ui, app
+from p3lib.ngt import TabbedNiceGui, YesNoDialog, FileAndFolderChooser, FileSaveChooser
+from nicegui import ui, app
 import plotly.graph_objects as go
 
 
@@ -27,39 +30,61 @@ class GUIServer(TabbedNiceGui):
     """@responsible for presenting a management GUI."""
 
     # We hard code the log path to ensure the user does not have the option to move them.
-    LOG_PATH                    = "mcu_tool_logs"
-    DEFAULT_SERVER_ADDRESS      = "0.0.0.0"
-    DEFAULT_SERVER_PORT         = 11938
-    PAGE_TITLE                  = "MPY Tool"
-    CFG_FILENAME                = ".mcu_tool_gui.cfg"
-    WIFI_SSID                   = "WIFI_SSID"
-    WIFI_PASSWORD               = "WIFI_PASSWORD"
-    DEVICE_ADDRESS              = "DEVICE_ADDRESS"
-    MCU_MAIN_PY                 = "MCU_MAIN_PY"
-    MCU_TYPE                    = "MCU_TYPE"
-    ERASE_MCU_FLASH             = "ERASE_MCU_FLASH"
-    LOAD_MICROPYTHON            = "LOAD_MICROPYTHON"
-    LOAD_APP                    = "LOAD_APP"
-    MEM_MON_RUN_GC              = "MEM_MON_RUN_GC"
-    MEM_MON_POLL_SEC            = "MEM_MON_POLL_SEC"
-    SCAN_PORT_STR               = "SCAN_PORT_STR"
-    SCAN_SECONDS                = "SCAN_SECONDS"
-    SCAN_IP_ADDRESS             = "SCAN_IP_ADDRESS"
-    DEFAULT_CONFIG              = {WIFI_SSID: "",
-                                   WIFI_PASSWORD: "",
-                                   DEVICE_ADDRESS: "",
-                                   MCU_MAIN_PY: "",
-                                   MCU_TYPE: LoaderBase.RPI_PICOW_MCU_TYPE,
-                                   ERASE_MCU_FLASH: True,
-                                   LOAD_MICROPYTHON: True,
-                                   LOAD_APP: True,
-                                   MEM_MON_RUN_GC: True,
-                                   MEM_MON_POLL_SEC: 5,
-                                   SCAN_PORT_STR: YDevScanner.YDEV_DISCOVERY_PORT,
-                                   SCAN_SECONDS: 5,
-                                   SCAN_IP_ADDRESS: ""}
-    DESCRIP_STYLE_1             = '<span style="font-size:1.5em;">'
-    SERIAL_PORT_OPEN            = 'SERIAL_PORT_OPEN'
+    LOG_PATH = "mcu_tool_logs"
+    DEFAULT_SERVER_ADDRESS = "0.0.0.0"
+    DEFAULT_SERVER_PORT = 11938
+    PAGE_TITLE = "MPY Tool"
+    CFG_FILENAME = ".mcu_tool_gui.cfg"
+    WIFI_SSID = "WIFI_SSID"
+    WIFI_PASSWORD = "WIFI_PASSWORD"
+    DEVICE_ADDRESS = "DEVICE_ADDRESS"
+    MCU_MAIN_PY = "MCU_MAIN_PY"
+    MCU_TYPE = "MCU_TYPE"
+    ERASE_MCU_FLASH = "ERASE_MCU_FLASH"
+    LOAD_MICROPYTHON = "LOAD_MICROPYTHON"
+    LOAD_APP = "LOAD_APP"
+    MEM_MON_RUN_GC = "MEM_MON_RUN_GC"
+    MEM_MON_POLL_SEC = "MEM_MON_POLL_SEC"
+    SCAN_PORT_STR = "SCAN_PORT_STR"
+    SCAN_SECONDS = "SCAN_SECONDS"
+    SCAN_IP_ADDRESS = "SCAN_IP_ADDRESS"
+    USB_WIFI_SETUP_IF = "USB_WIFI_SETUP_IF"
+    SETUP_WIFI_IF = "SETUP_WIFI_IF"
+    USB = "USB"
+    BLUETOOTH = "Bluetooth"
+    BT_MAC_ADDRESS = "BT_MAC_ADDRESS"
+    SSID = "SSID"
+    RSSI = "RSSI"
+    YDEV_WIFI_SCAN_COMPLETE = "YDEV_WIFI_SCAN_COMPLETE"
+    SET_YDEV_IP_ADDRESS = "SET_YDEV_IP_ADDRESS"
+    DEFAULT_CODE_PATH = "DEFAULT_CODE_PATH"
+    FILENAME1 = "FILENAME1"
+    COPY_TO_EDITOR = "COPY_TO_EDITOR"
+
+    DEFAULT_CONFIG = {WIFI_SSID: "",
+                      WIFI_PASSWORD: "",
+                      DEVICE_ADDRESS: "",
+                      MCU_MAIN_PY: "",
+                      MCU_TYPE: LoaderBase.RPI_PICOW_MCU_TYPE,
+                      ERASE_MCU_FLASH: True,
+                      LOAD_MICROPYTHON: True,
+                      LOAD_APP: True,
+                      MEM_MON_RUN_GC: True,
+                      MEM_MON_POLL_SEC: 5,
+                      SCAN_PORT_STR: YDevScanner.YDEV_DISCOVERY_PORT,
+                      SCAN_SECONDS: 5,
+                      SCAN_IP_ADDRESS: "",
+                      USB_WIFI_SETUP_IF: USB,
+                      SETUP_WIFI_IF: USB,
+                      DEFAULT_CODE_PATH: os.path.expanduser("~"),
+                      FILENAME1: "main.py",
+                      COPY_TO_EDITOR: True}
+
+    DESCRIP_STYLE_1 = '<span style="font-size:1.5em;">'
+    SERIAL_PORT_OPEN = 'SERIAL_PORT_OPEN'
+    RAW_MESSAGE = "RAW"
+    COMPLETE = "COMPLETE"
+    SET_EDITOR_LINES = "SET_EDITOR_LINES"
 
     @staticmethod
     def GetCmdOpts():
@@ -68,7 +93,7 @@ class GUIServer(TabbedNiceGui):
                 0 - The options instance.
                 1 - A Launcher instance."""
         parser = argparse.ArgumentParser(description="A tool to manage MCU devices using a GUI interface.",
-                                        formatter_class=argparse.RawDescriptionHelpFormatter)
+                                         formatter_class=argparse.RawDescriptionHelpFormatter)
         parser.add_argument("--address",  help=f"Address that the GUI server is bound to (default={GUIServer.DEFAULT_SERVER_ADDRESS}).", default=GUIServer.DEFAULT_SERVER_ADDRESS)
         parser.add_argument("-p", "--port",     type=int, help=f"The TCP server port to which the GUI server is bound to (default={GUIServer.DEFAULT_SERVER_PORT}).", default=GUIServer.DEFAULT_SERVER_PORT)
         parser.add_argument("-d", "--debug",    action='store_true', help="Enable debugging.")
@@ -82,21 +107,24 @@ class GUIServer(TabbedNiceGui):
            @param uio A UIO instance
            @param options The command line options instance."""
         super().__init__(uio.isDebugEnabled(), GUIServer.LOG_PATH)
-        self._uio                       = uio
-        self._options                   = options
-        self._cfgMgr                    = ConfigManager(self._uio, GUIServer.CFG_FILENAME, GUIServer.DEFAULT_CONFIG)
-        self._serialPortSelect1         = None
-        self._serialPortSelect2         = None
-        self._upgradeAppPathInput       = None
-        self._serialPortSelect1         = None
-        self._serialPortSelect2         = None
-        self._serialPortSelect3         = None
-        self._app_main_py_input         = None
-        self._select_main_py_button     = None
-        self._installSWButton           = None
-        self._loadMicroPythonInput      = None
-        self._eraseMCUFlashInput        = None
-        self._serialTXQueue             = Queue()
+        self._uio = uio
+        self._options = options
+        self._cfgMgr = ConfigManager(self._uio, GUIServer.CFG_FILENAME, GUIServer.DEFAULT_CONFIG)
+        self._serialPortSelect1 = None
+        self._serialPortSelect2 = None
+        self._upgradeAppPathInput = None
+        self._serialPortSelect1 = None
+        self._serialPortSelect2 = None
+        self._serialPortSelect3 = None
+        self._app_main_py_input = None
+        self._select_main_py_button = None
+        self._installSWButton = None
+        self._loadMicroPythonInput = None
+        self._eraseMCUFlashInput = None
+        self._serialTXQueue = Queue()
+        self._serialRXQueue = None
+        self._serialRXQueueLock = threading.Lock()
+        self._filePath = os.path.expanduser("~")
         self._loadConfig()
 
     def start(self):
@@ -119,11 +147,11 @@ class GUIServer(TabbedNiceGui):
                                  self._initMemMonTab]
 
             self.initGUI(tabNameList,
-                          tabMethodInitList,
-                          address=self._options.address,
-                          port=self._options.port,
-                          pageTitle=GUIServer.PAGE_TITLE,
-                          reload=False)
+                         tabMethodInitList,
+                         address=self._options.address,
+                         port=self._options.port,
+                         pageTitle=GUIServer.PAGE_TITLE,
+                         reload=False)
 
         finally:
             self.close()
@@ -135,20 +163,20 @@ class GUIServer(TabbedNiceGui):
 
         self._installPicoDialog = YesNoDialog("Power down the  RPi Pico W, hold it's button down and then power it back up. Then select the OK button below.",
                                               self._startInstallThread,
-                                              successButtonText = "OK",
-                                              failureButtonText = "Cancel")
+                                              successButtonText="OK",
+                                              failureButtonText="Cancel")
         self._installEsp32Dialog = YesNoDialog("Hold the non ESP32 reset button down and then press and release the reset button. Then select the OK button below.",
                                                self._startInstallThread,
-                                               successButtonText = "OK",
-                                               failureButtonText = "Cancel")
+                                               successButtonText="OK",
+                                               failureButtonText="Cancel")
         with ui.row():
             self._mcuTypeSelect = ui.select(options=[LoaderBase.RPI_PICOW_MCU_TYPE,
                                                      LoaderBase.RPI_PICO2W_MCU_TYPE,
                                                      LoaderBase.ESP32_MCU_TYPE,
                                                      LoaderBase.ESP32C3_MCU_TYPE,
                                                      LoaderBase.ESP32C6_MCU_TYPE],
-                                                     value=LoaderBase.RPI_PICOW_MCU_TYPE,
-                                                     label='MCU Type').style('width: 200px;')
+                                            value=LoaderBase.RPI_PICOW_MCU_TYPE,
+                                            label='MCU Type').style('width: 200px;')
 
             self._mcuTypeSelect.tooltip("The type of microcontroller (MCU) to load.")
             self._mcuTypeSelect.value = self._cfgMgr.getAttr(GUIServer.MCU_TYPE)
@@ -234,7 +262,8 @@ class GUIServer(TabbedNiceGui):
 
         for serialPortWidget in serialPortWidgetList:
             for portInfo in portInfoList:
-                devNameList.append(portInfo.device)
+                if portInfo.device not in devNameList:
+                    devNameList.append(portInfo.device)
             if len(devNameList) > 0:
                 serialPortWidget.options = devNameList
                 # Default to the first in the list
@@ -256,7 +285,8 @@ class GUIServer(TabbedNiceGui):
     async def _select_main_py(self):
         """@brief Select the MCU main.py micropython file."""
         selected_path = self._get_currently_selected_path()
-        result = await local_file_picker(selected_path)
+        file_and_folder_chooser = FileAndFolderChooser(selected_path)
+        result = await file_and_folder_chooser.open()
         if result:
             selected_file = result[0]
             if selected_file.endswith('main.py'):
@@ -339,7 +369,7 @@ class GUIServer(TabbedNiceGui):
         self._initTask()
         self._saveConfig()
         mcuType = self._mcuTypeSelect.value
-        startMessage="MCU: "
+        startMessage = "MCU: "
         duration = 0
         try:
             # We just set a long progress bar duration seconds here that should cover most installs.
@@ -354,7 +384,7 @@ class GUIServer(TabbedNiceGui):
                 self._checkSerialPortAvailable(self._serialPortSelect1.value)
                 self._startProgress(durationSeconds=duration, startMessage=startMessage)
 
-            t = threading.Thread( target=self._installSW)
+            t = threading.Thread(target=self._installSW)
             t.daemon = True
             t.start()
 
@@ -408,12 +438,12 @@ class GUIServer(TabbedNiceGui):
                 if self._loadAppInput.value:
                     USBLoader.CheckPythonCode(mcu_app_path)
 
-                fsStats = usbLoader.install(self._eraseMCUFlashInput.value, \
-                                  self._loadMicroPythonInput.value, \
-                                  self._loadAppInput.value, \
-                                  mcu_app_path, \
-                                  self._loadMpyInput.value, \
-                                  showInitialPrompt=False)
+                fsStats = usbLoader.install(self._eraseMCUFlashInput.value,
+                                            self._loadMicroPythonInput.value,
+                                            self._loadAppInput.value,
+                                            mcu_app_path,
+                                            self._loadMpyInput.value,
+                                            showInitialPrompt=False)
 
                 if fsStats:
                     flashSize = fsStats[0]
@@ -421,7 +451,7 @@ class GUIServer(TabbedNiceGui):
                     usedSpace = flashSize-freeSpace
                     percentageUsed = 0
                     if usedSpace > 0:
-                        percentageUsed = int( (usedSpace/flashSize)*100.0 )
+                        percentageUsed = int((usedSpace/flashSize)*100.0)
                     self.info(f"Flash partition size (MB): {flashSize/1E6:.3f}")
                     self.info(f"Used space(MB):            {usedSpace/1E6:.3f}")
                     self.info(f"Free space(MB):            {freeSpace/1E6:.3f}")
@@ -442,7 +472,7 @@ class GUIServer(TabbedNiceGui):
         """@brief Load the config from a config file."""
         try:
             self._cfgMgr.load()
-        except:
+        except Exception:
             pass
 
     def _initWiFiTab(self):
@@ -518,7 +548,7 @@ class GUIServer(TabbedNiceGui):
         self._saveConfig()
         duration = 120
         self._startProgress(durationSeconds=duration)
-        t = threading.Thread( target=self._resetWiFiConfigThread)
+        t = threading.Thread(target=self._resetWiFiConfigThread)
         t.daemon = True
         t.start()
 
@@ -527,7 +557,6 @@ class GUIServer(TabbedNiceGui):
         try:
             try:
                 address = self._deviceIPAddressInput1.value
-                appPath = self._upgradeAppPathInput.value
                 if len(address) == 0:
                     self.error("A device address is required.")
 
@@ -555,7 +584,7 @@ class GUIServer(TabbedNiceGui):
         # is still active.
         duration = 240
         self._startProgress(durationSeconds=duration)
-        t = threading.Thread( target=self._appUpgrade)
+        t = threading.Thread(target=self._appUpgrade)
         t.daemon = True
         t.start()
 
@@ -585,6 +614,38 @@ class GUIServer(TabbedNiceGui):
         finally:
             self._sendEnableAllButtons(True)
 
+    def _serialCheckRepl(self, reportError = True):
+        """@brief Check for the python REPL (>>> ) prompt on the open serial port.
+           @param reportError If True and the REPL prompt is not found the error is reported in he message log.
+           @return True if the REPL prompt is found."""
+        found = False
+        try:
+            self._serialRXQueueLock.acquire()
+            self._serialRXQueue = Queue()
+            self._serialRXQueueLock.release()
+            self._serialTXQueue.put('\r')
+            timeout = time() + 0.25
+            while True:
+                if not self._serialRXQueue.empty():
+                    data = self._serialRXQueue.get(block=False)
+                    if data.find(">>> ") != -1:
+                        found = True
+                        break
+                if time() >= timeout:
+                    break
+                sleep(0.05)
+
+            if not found and reportError:
+                self.error("Python REPL prompt (>>> ) not found on serial port.")
+        finally:
+            self._flush_queue(self._serialTXQueue)
+            self._flush_queue(self._serialRXQueue)
+            self._serialRXQueueLock.acquire()
+            self._serialRXQueue = None
+            self._serialRXQueueLock.release()
+
+        return found
+
     def _initScanTab(self):
         """@brief Create the scan tab contents."""
         markDownText = GUIServer.DESCRIP_STYLE_1+"""Scan for active devices on the LAN/WiFi."""
@@ -593,8 +654,8 @@ class GUIServer(TabbedNiceGui):
                        f'CT6:   {YDevScanner.CT6_DISCOVERY_PORT}']
         with ui.row():
             self._scanPortSelect = ui.select(options=portOptions,
-                                            label="Scan Port",
-                                            value=portOptions[0]).style('width: 300px;')
+                                             label="Scan Port",
+                                             value=portOptions[0]).style('width: 300px;')
             self._scanPortSelect.tooltip("The UDP port to which are you there (AYT) broadcast messages are sent.")
             self._scanSecondsInput = ui.number(label='Scan Period (Seconds)', value=3, format='%d', min=1, max=60)
             self._scanSecondsInput.style('width: 150px')
@@ -660,31 +721,336 @@ class GUIServer(TabbedNiceGui):
         finally:
             self._sendEnableAllButtons(True)
 
+    def _initSerialSendDialog(self):
+        """@brief A dialog displayed when the user wants to send a file to an MCU over a USB serial port."""
+        # Create the dialog
+        with ui.dialog() as self._serialSendDialog, ui.card():
+            ui.label("Enter the name for the file to create on the MCU flash.")
+            with ui.row():
+                ser_send_file = self._cfgMgr.getAttr(GUIServer.FILENAME1)
+                self._serialSendFileInput = ui.input('Filename', value=ser_send_file)
+            with ui.row():
+                ui.button("Ok", on_click=lambda: self._serialSendFile())
+                ui.button("Cancel", on_click=lambda: (self._serialSendDialog.close()))
+
+    def _initSerialGetFileDialog(self):
+        """@brief A dialog displayed when the user wants to get a file from the MCU over a USB serial port."""
+        # Create the dialog
+        with ui.dialog() as self._serialDownloadFileDialog, ui.card():
+            ui.label("Enter the name for the file to download from the MCU flash.")
+            with ui.row():
+                ser_get_file = self._cfgMgr.getAttr(GUIServer.FILENAME1)
+                self._serialDownloadFileInput = ui.input('Filename', value=ser_get_file)
+                cp_to_editor = self._cfgMgr.getAttr(GUIServer.COPY_TO_EDITOR)
+                self._serialDownloadCoptToEditorSwitch = ui.switch("Copy to editor", value=cp_to_editor, on_change=self._copyToEditorSwitchChanged).style('width: 200px;')
+            with ui.row():
+                ui.button("Ok", on_click=lambda: self._getMCUFile())
+                ui.button("Cancel", on_click=lambda: (self._serialDownloadFileDialog.close()))
+
+    def _copyToEditorSwitchChanged(self):
+        self._cfgMgr.addAttr(GUIServer.COPY_TO_EDITOR, self._serialDownloadCoptToEditorSwitch.value)
+        self._saveConfig()
+
+    def _initRunFileDialog(self):
+        """@brief A dialog displayed when the user wants to run a python file that is sitting in the MCU flash over a serial port connection."""
+        # Create the dialog
+        with ui.dialog() as self._serialRunFileDialog, ui.card():
+            ui.label("Enter the name for the file on the MCU flash to execute.")
+            with ui.row():
+                ser_get_file = self._cfgMgr.getAttr(GUIServer.FILENAME1)
+                self._serialRunFileInput = ui.input('Filename', value=ser_get_file).tooltip("This python file must have a main() method.")
+                self._serialRunMainSwitch = ui.switch("Run main.py", value=False, on_change=self._serialRunMainSwitchChanged).style('width: 200px;').tooltip("If selected 'CTRL D' is sent on the serial port which causes main.py to be executed.")
+            with ui.row():
+                ui.button("Ok", on_click=lambda: self._runMCUFile())
+                ui.button("Cancel", on_click=lambda: (self._serialRunFileDialog.close()))
+
+    def _serialRunMainSwitchChanged(self):
+        if self._serialRunMainSwitch.value:
+            self._serialRunFileInput.value = 'main.py'
+            self._serialRunFileInput.disable()
+        else:
+            self._serialRunFileInput.enable()
+
+    def _runMCUFile(self):
+        self._serialRunFileDialog.close()
+        self._updateFilename1(self._serialRunFileInput.value)
+        if self._serialCheckRepl():
+            if self._serialRunMainSwitch.value:
+                self._sendCtrlD()
+            else:
+                self._runMCUFileMain()
+
+    def _runMCUFileMain(self):
+        code_lines = []
+        module_name = self._serialRunFileInput.value.replace(".py", "")
+        code_lines.append(f'import {module_name}')
+        code_lines.append(f'{module_name}.main()')
+        code_lines.append(f'print("{GUIServer.COMPLETE}")')
+        code_lines.append('')
+        self._runPythonCodeFromREPL(code_lines)
+
+    def _runPythonCodeFromREPL(self, code_lines, log_prefix=None):
+        """@brief Run python code from the REPL prompt.
+           @return A list of lines of text received."""
+        rx_lines = []
+        self._sendEnableAllButtons(False)
+        try:
+
+            self._serialRXQueueLock.acquire()
+            self._serialRXQueue = Queue()
+            self._serialRXQueueLock.release()
+
+            # Send python code on serial port to
+            for line in code_lines:
+                self._serialTXQueue.put(line + '\r')
+
+            timeout = time() + 3
+            running = True
+            while running:
+                if not self._serialRXQueue.empty():
+                    rxStr = self._serialRXQueue.get()
+                    lines = rxStr.split('\n')
+                    for line in lines:
+                        line = line.rstrip('\r\n')
+                        if line.startswith(GUIServer.COMPLETE) or line.find(f'print("{GUIServer.COMPLETE}")') >= 0:
+                            running = False
+                            break
+
+                        if log_prefix and line.startswith(log_prefix):
+                            prefix_len = len(log_prefix)
+                            line = line[prefix_len:]
+                            self.msg(line)
+                            rx_lines.append(line)
+
+                        if not log_prefix:
+                            self.msg(line)
+                            rx_lines.append(line)
+
+                if time() > timeout:
+                    self.error("Timeout waiting for response on serial port.")
+                    self._flush_queue(self._serialTXQueue)
+                    self._flush_queue(self._serialRXQueue)
+                    break
+
+        finally:
+            self._serialRXQueueLock.acquire()
+            self._serialRXQueue = None
+            self._serialRXQueueLock.release()
+
+            self._sendEnableAllButtons(True)
+
+        return rx_lines
+
     def _initSerialTab(self):
         """@brief Show the serial port output."""
+        self._initSerialSendDialog()
+        self._initSerialGetFileDialog()
+        self._initRunFileDialog()
+
         with ui.row():
             self._serialPortSelect3 = ui.select(options=[], label='MCU serial port', on_change=self._serialPortSelect3Changed).style('width: 200px;')
             self._serialPortSelect3.tooltip("The serial port to which the MCU is connected.")
             updateSerialPortButton = ui.button('update serial port list', on_click=self._updateSerialPortList)
             updateSerialPortButton.tooltip("Update the list of available serial ports.")
 
-        with ui.row():
-            self._openSerialPortButton  = ui.button('Open', on_click=self._openSerialPortHandler)
+            self._openSerialPortButton = ui.button('Open', on_click=self._openSerialPortHandler)
             self._closeSerialPortButton = ui.button('Close', on_click=self._closeSerialPortHandler)
             self._hwResetESP32 = ui.switch("HW Reset ESP32", value=False).tooltip('Perform a reset using DTR/RTS if an ESP32 MCU is connected when the serial port is opened.')
 
+        with ui.card().classes('w-full'):
+            self._code_editor = ui.textarea(placeholder='MicroPython code', )
+            self._code_editor.props('rows=15')
+            self._code_editor.classes('w-full').style('font-family: monospace;')
+
         with ui.row():
-            self._sendCtrlCButton  = ui.button('CTRL C', on_click=self._sendCtrlC).tooltip("Stop program and get REPL (>>>) prompt.")
-            self._sendCtrlBButton  = ui.button('CTRL B', on_click=self._sendCtrlB).tooltip("Get MicroPython version from REPL prompt.")
-            self._sendCtrlDButton  = ui.button('CTRL D', on_click=self._sendCtrlD).tooltip("Start running the main.py file (if it exists) from REPL prompt.")
-            self._sendTextButton  = ui.button('SEND', on_click=self._sendText)
-            self._sendTextInput = ui.input(label='Text to send').style('width: 400px;')
-            self._sendTextInput.on('keydown.enter', lambda _: self._sendText())
+            self._sendCtrlCButton = ui.button(icon='stop', on_click=self._sendCtrlC).tooltip("Send CTRL C to stop any program and get REPL (>>>) prompt. This should be selected before selecting other buttons.")
+            self._sendCtrlBButton = ui.button(icon='info', on_click=self._sendCtrlB).tooltip("Send CTRL B to get MicroPython version from REPL prompt.")
+            self._sendTextButton = ui.button(icon='play_arrow', on_click=self._sendText).tooltip("Run the python code above on the MCU.")
+            self._sendCtrlDButton = ui.button(icon='run_circle', on_click=self._openSerialRunFileDialog).tooltip("Send CTRL D to start running the main.py file (if it exists) from REPL prompt.")
+
+            self._listMCUFoldersButton = ui.button(icon='folder', on_click=self._listMCUFolders).tooltip("List files on MCU flash memory.")
+            self._uploadButton = ui.button(icon='upload', on_click=self._serialSendDialog.open).tooltip("Upload a file to the MCU with the above contents.")
+            self._downloadButton = ui.button(icon='download', on_click=self._serialDownloadFileDialog.open).tooltip("Download a file from the MCU.")
+            self._saveCodeButton = ui.button(icon='arrow_circle_down', on_click=self._serialSaveLocalFile).tooltip("Save to a local file.")
+            self._loadCodeButton = ui.button(icon='arrow_circle_up', on_click=self._serialLoadLocalFile).tooltip("Load from a local file.")
 
         self._setSerialPortClosed()
 
         # Populate the list of available serial ports if possible.
         self._updateSerialPortList()
+
+    def _openSerialRunFileDialog(self):
+        self._serialRunFileDialog.open()
+
+    def _updateFilename1(self, filename):
+        self._serialSendFileInput.value = filename
+        self._serialDownloadFileInput.value = filename
+        self._serialRunFileInput.value = filename
+        self._cfgMgr.addAttr(GUIServer.FILENAME1, filename)
+        self._saveConfig()
+
+    def _serialSendFile(self):
+        """@brief Send to a file on the MCU."""
+        self._serialSendDialog.close()
+        if self._serialSendFileInput.value:
+            self._updateFilename1(self._serialSendFileInput.value)
+            threading.Thread(target=self._serial_send_thread, args=(self._serialPortSelect3.value, self._code_editor.value, self._serialSendFileInput.value)).start()
+        else:
+            ui.notify('No filename entered.', type='warning')
+
+    def _serial_send_thread(self, device, data_str, remote_file):
+        tmp_file = None
+        try:
+            # We need to close the serial port so that we can use mpremote to send the file
+            self._closeSerialPortHandler()
+            sleep(.25)
+
+            tmp_file = os.path.join(MCUBase.GetTempFolder(), f"editor_file_{str(int(random()*1E9))}.py")
+            with open(tmp_file, 'w') as fd:
+                fd.write(data_str)
+            self.info(f"Created {tmp_file}")
+
+            cmd_list = ['mpy_tool_mpremote', 'connect', f'{device}', 'cp', tmp_file, f':{remote_file}']
+            cmd = ' '.join(cmd_list)
+            self.debug(f"Executing cmd: {cmd}")
+            result = check_output(cmd, shell=True).decode("utf-8", errors="ignore")
+            self.debug(f"cmd result: {result}")
+
+            self.info(f"Copied {tmp_file} to {remote_file}")
+
+        finally:
+            sleep(0.25)
+            # Originally we cleaned up the temp file but it can be useful to leave it.
+            # Open the serial port again
+            self._openSerialPortHandler()
+
+    def _listMCUFolders(self):
+        if self._serialCheckRepl():
+            threading.Thread(target=self._listMCUFoldersThread).start()
+
+    def _listMCUFoldersThread(self):
+        code_lines = []
+        code_lines.append('import uos')
+        code_lines.append('')
+        code_lines.append('def is_dir(path):')
+        code_lines.append('    try:')
+        code_lines.append('        return uos.stat(path)[0] & 0o170000 == 0o040000')
+        code_lines.append('    except:')
+        code_lines.append('        return False')
+        code_lines.append('')
+        code_lines.append('def list_dirs_recursive(path):')
+        code_lines.append('    dirs = []')
+        code_lines.append('    try:')
+        code_lines.append('        for entry in uos.listdir(path):')
+        code_lines.append('            full_path = path.rstrip("/") + "/" + entry')
+        code_lines.append('            dirs.append(full_path)')
+        code_lines.append('            if is_dir(full_path):')
+        code_lines.append('                dirs.extend(list_dirs_recursive(full_path))')
+        code_lines.append('    except:')
+        code_lines.append('        pass')
+        code_lines.append('    return dirs')
+        code_lines.append('')
+        code_lines.append('entries = list_dirs_recursive("/")')
+        code_lines.append('for e in entries:')
+        code_lines.append('    print(f"MCU File:{e}")')
+        code_lines.append('')
+        code_lines.append(f'print("{GUIServer.COMPLETE}")')
+        code_lines.append('')
+        self._runPythonCodeFromREPL(code_lines, log_prefix="MCU File:")
+
+    def _getMCUFile(self):
+        self._serialDownloadFileDialog.close()
+        if self._serialDownloadFileInput.value:
+            self._updateFilename1(self._serialDownloadFileInput.value)
+            if self._serialCheckRepl():
+                threading.Thread(target=self._getMCUFileThread, args = (self._serialDownloadFileInput.value,)).start()
+
+    def _getMCUFileThread(self, filename):
+        code_lines = []
+        code_lines.append(f"with open('{filename}', 'r') as fd:")
+        code_lines.append('    lines = fd.readlines()')
+        code_lines.append('')
+        code_lines.append('for line in lines:')
+        code_lines.append("    print('LINE:' + line)")
+        code_lines.append('')
+        code_lines.append(f'print("{GUIServer.COMPLETE}")')
+        code_lines.append('')
+        lines = self._runPythonCodeFromREPL(code_lines, log_prefix="LINE:")
+        if lines and self._serialDownloadCoptToEditorSwitch.value:
+            self.update_editor(lines)
+
+    def _flush_queue(self, q: Queue):
+        """@brief flush the queue"""
+        if q:
+            while not q.empty():
+                try:
+                    q.get_nowait()
+                except Empty:
+                    break
+
+    async def _load_python_file(self):
+        """@brief Select the MCU main.py micropython file."""
+        selected_path = self._get_currently_selected_path()
+        file_and_folder_chooser = FileAndFolderChooser(selected_path)
+        result = await file_and_folder_chooser.open()
+        if result:
+            selected_file = result[0]
+            if selected_file.endswith('.py'):
+                if os.path.isfile(selected_file):
+                    contents = None
+                    with open(selected_file, 'r') as fd:
+                        contents = fd.readlines()
+                    if contents:
+                        self._code_editor.value = contents
+
+            else:
+                self.error(f"{selected_file} selected. You must select a *.py file.")
+
+    async def _serialSaveLocalFile(self):
+        _path = self._cfgMgr.getAttr(GUIServerEXT1.DEFAULT_CODE_PATH)
+        ffc = FileSaveChooser(_path)
+        text_files = await ffc.open()
+        if text_files:
+            try:
+                with open(str(text_files[0]), 'w') as fd:
+                    fd.write(self._code_editor.value)
+                self.info(f"Saved {text_files}")
+
+            except OSError as ex:
+                ui.notify(str(ex), type='negative')
+
+        if text_files:
+            _file = Path(text_files[0])
+            if text_files and _file.is_dir():
+                self._cfgMgr.addAttr(GUIServerEXT1.DEFAULT_CODE_PATH, str(_file))
+            else:
+                folder = str(_file.parent)
+                self._cfgMgr.addAttr(GUIServerEXT1.DEFAULT_CODE_PATH, folder)
+
+            _path = self._cfgMgr.getAttr(GUIServerEXT1.DEFAULT_CODE_PATH)
+            self._saveConfig()
+
+    async def _serialLoadLocalFile(self):
+        _path = self._cfgMgr.getAttr(GUIServerEXT1.DEFAULT_CODE_PATH)
+        ffc = FileAndFolderChooser(_path)
+        text_files = await ffc.open()
+        if text_files:
+            with open(text_files[0], 'r') as fd:
+                contents = fd.read()
+                if contents:
+                    self._code_editor.value = contents
+                    self.info(f"Loaded from {text_files}")
+
+        if text_files:
+            _file = Path(text_files[0])
+            if text_files and _file.is_dir():
+                self._cfgMgr.addAttr(GUIServerEXT1.DEFAULT_CODE_PATH, str(_file))
+            else:
+                folder = str(_file.parent)
+                self._cfgMgr.addAttr(GUIServerEXT1.DEFAULT_CODE_PATH, folder)
+
+            _path = self._cfgMgr.getAttr(GUIServerEXT1.DEFAULT_CODE_PATH)
+            self._saveConfig()
 
     def _serialPortSelect3Changed(self):
         if self._serialPortSelect1:
@@ -699,6 +1065,9 @@ class GUIServer(TabbedNiceGui):
         self._sendCtrlCButton.enabled = open
         self._sendCtrlDButton.enabled = open
         self._sendTextButton.enabled = open
+        self._uploadButton.enabled = open
+        self._downloadButton.enabled = open
+        self._listMCUFoldersButton.enabled = open
 
     def _openSerialPortHandler(self):
         # Enable the close serial port button so that the user can close the serial port when they are finished.
@@ -757,9 +1126,17 @@ class GUIServer(TabbedNiceGui):
                                 while ser.in_waiting > 0:
                                     bytesRead = ser.read(ser.in_waiting)
                                     sRead = bytesRead.decode("utf-8", errors="ignore")
-                                    sRead = sRead.rstrip('\r\n')
                                     if len(sRead) > 0:
-                                        self.info(serialPort + ": " + sRead)
+                                        self._serialRXQueueLock.acquire()
+                                        # If we have an queue to put RX data into, do so
+                                        if self._serialRXQueue:
+                                            self._serialRXQueue.put(sRead)
+
+                                        #If not then send it to the message log.
+                                        else:
+                                            sRead = sRead.rstrip('\r\n')
+                                            self.msg(sRead)
+                                        self._serialRXQueueLock.release()
 
                                 while not self._serialTXQueue.empty():
                                     txStr = self._serialTXQueue.get()
@@ -794,18 +1171,25 @@ class GUIServer(TabbedNiceGui):
             self._sendEnableAllButtons(True)
 
     def _sendCtrlB(self):
-        self._serialTXQueue.put('\02')
+        if self._serialCheckRepl():
+            self._serialTXQueue.put('\02')
 
     def _sendCtrlC(self):
         self._serialTXQueue.put('\03')
 
     def _sendCtrlD(self):
-        self._serialTXQueue.put('\04')
+        if self._serialCheckRepl():
+            self._serialTXQueue.put('\04')
 
     def _sendText(self):
-        text = self._sendTextInput.value
-        if text:
-            self._serialTXQueue.put(text + '\r')
+        if self._serialCheckRepl():
+            text = self._code_editor.value
+            lines = text.split('\n')
+            if len(lines) > 0:
+                for line in lines:
+                    line = line.rstrip('\r\n')
+                    self._serialTXQueue.put(line + '\r')
+            self._serialTXQueue.put('\r')
 
     def _closeSerialPortHandler(self):
         """@brief Shut down the running view serial port task."""
@@ -813,11 +1197,7 @@ class GUIServer(TabbedNiceGui):
         self._setSerialPortClosed()
 
     def _setSerialPortClosed(self):
-        self._closeSerialPortButton.disable()
-        self._sendCtrlBButton.disable()
-        self._sendCtrlCButton.disable()
-        self._sendCtrlDButton.disable()
-        self._sendTextButton.disable()
+        self._update_serial_port_open_buttons(False)
         self._viewSerialRunning = False
 
     def _initMemMonTab(self):
@@ -867,26 +1247,45 @@ class GUIServer(TabbedNiceGui):
             self._memMonSecondsInput.value = 1
 
         self.info("Started memory monitor.")
+
         # Open another browser window to show the memory usage.
         @ui.page('/memory_usage')
         def memory_usage():
             mu = MemoryUsage(self._options,
-                        self._deviceIPAddressInput2.value,
-                        self._runGCInput.value,
-                        self._memMonSecondsInput.value,
-                        self._uio.isDebugEnabled())
+                             self._deviceIPAddressInput2.value,
+                             self._runGCInput.value,
+                             self._memMonSecondsInput.value,
+                             self._uio.isDebugEnabled())
             mu.start()
-         # This will open the new page in a new browser window
+        # This will open the new page in a new browser window
         ui.run_javascript("window.open('/memory_usage', '_blank')")
 
     def close(self):
-            """@brief Close down the app server."""
-            ui.notify("Shutting down application...")
-            ui.timer(interval=2, callback=self._shutdownApp)
+        """@brief Close down the app server."""
+        ui.notify("Shutting down application...")
+        ui.timer(interval=2, callback=self._shutdownApp)
 
     def _shutdownApp(self):
         """@brief Shutdown the app"""
         app.shutdown()
+
+    def _rawGT(self, msg):
+        """@brief Update a a raw message. This must be called from the GUI thread.
+           @param msg The message to display."""
+        self._handleMsg(msg)
+
+    def msg(self, msg):
+        """@brief Send a info message to be displayed in the GUI.
+                  This can be called from outside the GUI thread.
+           @param msg The message to be displayed."""
+        msgDict = {GUIServer.RAW_MESSAGE: str(msg)}
+        self.updateGUI(msgDict)
+
+    def update_editor(self, lines):
+        """@brief Send lines of text to be loaded into the editor.
+           @param lines A list of text lines to be set in the editor."""
+        msgDict = {GUIServer.SET_EDITOR_LINES: lines}
+        self.updateGUI(msgDict)
 
 class MemoryUsage(TabbedNiceGui):
 
@@ -1014,7 +1413,7 @@ class MemoryUsage(TabbedNiceGui):
         self.debug(f"CMD: {url}")
         r = requests.get(url)
         obj = r.json()
-        self.debug(f"CMD RESPONSE: { str(obj) }")
+        self.debug(f"CMD RESPONSE: {str(obj)}")
         return obj
 
     def _memMonThread(self):
@@ -1096,31 +1495,6 @@ class GUIServerEXT1(GUIServer):
     """@brief Add WiFi configuration to the GUIServer.
        This class integrates the WiFi setup with bluetooth (rather than just USB) that
        was not present in the parent class."""
-    CFG_FILENAME                = ".mcu_tool_gui_ext1.cfg"
-    USB_WIFI_SETUP_IF           = "USB_WIFI_SETUP_IF"
-    USB                         = "USB"
-    BLUETOOTH                   = "Bluetooth"
-    BT_MAC_ADDRESS              = "BT_MAC_ADDRESS"
-    SSID                        = "SSID"
-    RSSI                        = "RSSI"
-    YDEV_WIFI_SCAN_COMPLETE     = "YDEV_WIFI_SCAN_COMPLETE"
-    SET_YDEV_IP_ADDRESS         = "SET_YDEV_IP_ADDRESS"
-    SETUP_WIFI_IF               = "SETUP_WIFI_IF"
-    DEFAULT_CONFIG              = {GUIServer.WIFI_SSID: "",
-                                   GUIServer.WIFI_PASSWORD: "",
-                                   GUIServer.DEVICE_ADDRESS: "",
-                                   GUIServer.MCU_MAIN_PY: "",
-                                   GUIServer.MCU_TYPE: LoaderBase.RPI_PICOW_MCU_TYPE,
-                                   GUIServer.ERASE_MCU_FLASH: True,
-                                   GUIServer.LOAD_MICROPYTHON: True,
-                                   GUIServer.LOAD_APP: True,
-                                   USB_WIFI_SETUP_IF: USB,
-                                   GUIServer.MEM_MON_RUN_GC: True,
-                                   GUIServer.MEM_MON_POLL_SEC: 5,
-                                   SETUP_WIFI_IF: USB,
-                                   GUIServer.SCAN_PORT_STR: YDevScanner.YDEV_DISCOVERY_PORT,
-                                   GUIServer.SCAN_SECONDS: 5,
-                                   GUIServer.SCAN_IP_ADDRESS: ""}
 
     def __init__(self, uio, options):
         """@brief Constructor
@@ -1140,6 +1514,7 @@ class GUIServerEXT1(GUIServer):
         self._scanIPAddressInput = None
         self._cfgMgr = ConfigManager(self._uio, GUIServerEXT1.CFG_FILENAME, GUIServerEXT1.DEFAULT_CONFIG)
         self._loadConfig()
+        self._saveConfig()
 
     def _saveConfig(self):
         """@brief Save some parameters to a local config file."""
@@ -1313,7 +1688,7 @@ class GUIServerEXT1(GUIServer):
         self._saveConfig()
         duration = 300
         self._startProgress(durationSeconds=duration)
-        threading.Thread( target=self._usbSetWiFiNetwork, args=(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)).start()
+        threading.Thread(target=self._usbSetWiFiNetwork, args=(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)).start()
 
     def _startBluetoothWifiSetup(self):
         """@brief Start attempting to setup the YDev WiFi settings using a bluetooth connection to the YDev device."""
@@ -1338,7 +1713,7 @@ class GUIServerEXT1(GUIServer):
                         networkDicts = yDevBlueTooth.wifi_scan(bluetoothDev.address)
                         # This should open a dialog to allow the user to setup the WiFi
                         msgDict = {GUIServerEXT1.BT_MAC_ADDRESS: bluetoothDev.address,
-                                GUIServerEXT1.YDEV_WIFI_SCAN_COMPLETE: networkDicts}
+                                   GUIServerEXT1.YDEV_WIFI_SCAN_COMPLETE: networkDicts}
                         self.updateGUI(msgDict)
 
                     else:
@@ -1394,8 +1769,8 @@ class GUIServerEXT1(GUIServer):
            @param event The button event."""
         self._copyWifiParams(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)
         self._saveConfig()
-        self._setExpectedProgressMsgCount(9,20)
-        threading.Thread( target=self._btSetWiFiNetworkThread, args=(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)).start()
+        self._setExpectedProgressMsgCount(9, 20)
+        threading.Thread(target=self._btSetWiFiNetworkThread, args=(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)).start()
 
     def _waitForPingSuccess(self, address):
         upgradeManager = UpgradeManager(self._mcuTypeSelect.value, uio=self)
@@ -1477,6 +1852,17 @@ class GUIServerEXT1(GUIServer):
             open = rxDict[GUIServerEXT1.SERIAL_PORT_OPEN]
             self._update_serial_port_open_buttons(open)
 
+        if GUIServer.RAW_MESSAGE in rxDict:
+            msg = rxDict[GUIServer.RAW_MESSAGE]
+            self._rawGT(msg)
+
+        if GUIServer.SET_EDITOR_LINES in rxDict:
+            lines = rxDict[GUIServer.SET_EDITOR_LINES]
+            self._set_editor(lines)
+
+    def _set_editor(self, lines):
+        self._code_editor.value = "\n".join(lines)
+
     def _continueYDevWifiBTSetup(self, btMacAddress, wifiNetworkDicts):
         self._btMacAddress = btMacAddress
         # Build a list of the ssid's found.
@@ -1536,10 +1922,10 @@ def main():
             guiServer = GUIServerEXT1(uio, options)
             guiServer.start()
 
-    #If the program throws a system exit exception
+    # If the program throws a system exit exception
     except SystemExit:
         pass
-    #Don't print error information if CTRL C pressed
+    # Don't print error information if CTRL C pressed
     except KeyboardInterrupt:
         pass
     except Exception as ex:
@@ -1550,15 +1936,8 @@ def main():
         else:
             uio.error(str(ex))
 
-if __name__== '__main__':
+
+if __name__ == '__main__':
     main()
 
 
-# TODO
-# Just load App and progress bar does not work, FIX
-# Add ability for MCU path not to end in mcu
-# Add ability to upgrade SW
-# Add log files for UIO output
-# Add web sever , move REST server to a different port
-# Add Scan and reboot/Powercycle
-# Add all GUI features to CMD line tool
