@@ -40,8 +40,14 @@ class LoaderBase(MCUBase):
     WIFI_CONFIGURED_KEY         = "WIFI_CONFIGURED"
     SSID_KEY                    = "SSID"
 
-    MAIN_PYTHON_FILE            = "main.py"
-    MAIN_MICROPYTHON_FILE       = "main.mpy"
+    MAIN_PY_FILE                = "main.py"
+    MAIN_MPY_FILE               = "main.mpy"
+
+    BOOT_PY_FILE                = "boot.py"
+    BOOT_MPY_FILE               = "boot.mpy"
+
+    WEBREPL_CFG_PY_FILE         = "webrepl_cfg.py"
+    WEBREPL_CFG_MPY_FILE        = "webrepl_cfg.mpy"
 
     RPI_PICOW_MCU_TYPE          = 'RPi Pico W'
     RPI_PICO2W_MCU_TYPE         = 'RPi Pico 2 W'
@@ -543,22 +549,38 @@ class LoaderBase(MCUBase):
             fileList = []
             LoaderBase.GetFiles(fileList, self._appRootFolder)
             pyFileList = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION)
-            mainPy = os.path.join(self._appRootFolder, LoaderBase.MAIN_PYTHON_FILE)
+            mainPy = os.path.join(self._appRootFolder, LoaderBase.MAIN_PY_FILE)
+            bootPy = os.path.join(self._appRootFolder, LoaderBase.BOOT_PY_FILE)
             # Ensure we have the main python file
             if mainPy not in pyFileList:
-                raise Exception(f"{LoaderBase.MAIN_PYTHON_FILE} file not found in {self._appRootFolder}")
+                raise Exception(f"{LoaderBase.MAIN_PY_FILE} file not found in {self._appRootFolder}")
             mpyFileList = self._convertToMPY(pyFileList)
             # Do Not load the .py files onto the MCU only the .mpy and other files
             filesToLoad = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION, include=False)
             filesToLoad = filesToLoad + mpyFileList
             # Ensure we load the main python file
             filesToLoad.insert(0, mainPy)
-            # Remove the main.mpy file from the list
-            mainMpyFile = os.path.join(self._appRootFolder, LoaderBase.MAIN_MICROPYTHON_FILE)
-            if mainMpyFile in filesToLoad:
-                index = filesToLoad.index(mainMpyFile)
-                if index >= 0:
-                    del filesToLoad[index]
+            # Remove the main.mpy file from the  if present
+            mainMpyFile = os.path.join(self._appRootFolder, LoaderBase.MAIN_MPY_FILE)
+            self._removeFileFromList(mainMpyFile, filesToLoad)
+
+            # If we have a boot.py file ensure it is in the list of files to load
+            if os.path.isfile(bootPy):
+                filesToLoad.insert(0, bootPy)
+            # Remove the boot.mpy file from the list if present
+            bootMpyFile = os.path.join(self._appRootFolder, LoaderBase.BOOT_MPY_FILE)
+            self._removeFileFromList(bootMpyFile, filesToLoad)
+
+            # Remove the webrepl_cfg.mpy file from the list if present
+            webReplCfgMpyFile = os.path.join(self._appRootFolder, LoaderBase.WEBREPL_CFG_MPY_FILE)
+            self._removeFileFromList(webReplCfgMpyFile, filesToLoad)
+
+            # Load the webrepl_cfg.py if it exists locally
+            webReplPyFile = os.path.join(self._appRootFolder, LoaderBase.WEBREPL_CFG_PY_FILE)
+            if os.path.isfile(webReplPyFile):
+                if webReplPyFile not in filesToLoad:
+                    filesToLoad.append(webReplPyFile)
+
         else:
             # Ensure we don't have any mpy files at or below the app root folder.
             self.deleteLocalMPYFiles()
@@ -566,6 +588,15 @@ class LoaderBase(MCUBase):
             # Load all files in and under the app root folder to the MCU
             LoaderBase.GetFiles(filesToLoad, self._appRootFolder)
         return filesToLoad
+
+    def _removeFileFromList(self, theFile, theList):
+        """@brief Remove a file from a list of files.
+           @param theFile The file to be removed from the list of files.
+           @param theList The list of files from which the above file is to be removed."""
+        if theFile in theList:
+            index = theList.index(theFile)
+            if index >= 0:
+                del theList[index]
 
     def deleteLocalMPYFiles(self, showMsg=True):
         """@brief Delete existing *.mpy files,
@@ -1319,12 +1350,12 @@ class MCULoader(LoaderBase):
            @param appRootFolder This may be the app root folder or the main.py file in the app root folder.
            @return The app root path. This is the location where the main.py file sits."""
         if os.path.isdir(appRootFolder):
-            mainFile = os.path.join(appRootFolder, LoaderBase.MAIN_PYTHON_FILE)
+            mainFile = os.path.join(appRootFolder, LoaderBase.MAIN_PY_FILE)
             if not os.path.isfile(mainFile):
                 raise Exception(f"{mainFile} file not found.")
         else:
             # If appRootFolder points to the main.py python file
-            if appRootFolder.endswith(LoaderBase.MAIN_PYTHON_FILE) and os.path.isfile(appRootFolder):
+            if appRootFolder.endswith(LoaderBase.MAIN_PY_FILE) and os.path.isfile(appRootFolder):
                 # Get the dir it's sitting in
                 appRootFolder = os.path.dirname(appRootFolder)
             else:
@@ -1348,7 +1379,7 @@ class MCULoader(LoaderBase):
     def _check_for_main(self):
         """@brief Check for the main.py file in the appRootFolder folder."""
         if os.path.isdir(self._appRootFolder):
-            main_file = os.path.join(self._appRootFolder, 'main.py')
+            main_file = os.path.join(self._appRootFolder, MCULoader.MAIN_PY_FILE)
             if not os.path.isfile(main_file):
                 raise Exception(f'{main_file} file not found.')
 
@@ -1630,7 +1661,7 @@ class UpgradeManager(LoaderBase):
             localSHA256 = hashlib.sha256(encodedData).hexdigest()
 
         fileName = os.path.basename(localFile)
-        # We don't use os.path.join() here as we want to use the / separator 
+        # We don't use os.path.join() here as we want to use the / separator
         # regardless of the platform we are runing on.
         destFile = destPath + '/' + fileName
 
