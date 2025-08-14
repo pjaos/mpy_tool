@@ -31,6 +31,8 @@ class WebServer():
     INACTIVE_APP_FOLDER_KEY = "INACTIVE_APP_FOLDER"
     WIFI_SCAN_RESULTS = "WIFI_SCAN_RESULTS"
 
+    WEBREPL_CFG_PY_FILE = "webrepl_cfg.py"
+
     @staticmethod
     def GetErrorDict(msg):
         """@brief Get an error response dict.
@@ -387,6 +389,32 @@ class WebServer():
                 else:
                     raise
 
+    def _set_webrepl_password(self, request):
+        """@brief Create a dir on the devices file system.
+           @param request The http request.
+           @return The response dict."""
+        password = request.args.get("password", None)
+        if password:
+            if len(password) >= 4 and len(password) <= 9:
+                try:
+                    lines = ['# The password must be 4 to 9 characters long',
+                            '# This file must have a new line after the password.',
+                            f"PASS = '{password}'"]
+                    with open(WebServer.WEBREPL_CFG_PY_FILE, 'w') as fd:
+                        for line in lines:
+                            fd.write(line + "\n")
+                    responseDict = WebServer.GetOKDict()
+                    responseDict['WEBREPL_PASSWORD'] = f'{password}'
+                    responseDict['INFO'] = 'Restart MCU to set new password.'
+                except OSError:
+                    responseDict = WebServer.GetErrorDict(f"Failed to create {WebServer.WEBREPL_CFG_PY_FILE}")
+            else:
+                responseDict = WebServer.GetErrorDict(f"{password} is an invalid WebREPL password. The password length must be >= 4 and <= 9 characters long.")
+        else:
+            responseDict = WebServer.GetErrorDict("WebREPL password not defined.")
+
+        return responseDict
+
     def run(self):
         """@brief This is a blocking method that starts the web server."""
 
@@ -498,6 +526,12 @@ class WebServer():
         async def shutdown(request):
             request.app.shutdown()
             return get_json(WebServer.GetErrorDict("The server is shutting down..."))
+
+        # The ability to seth the WebREPL password over the REST interface is a clear security hole.
+        # This is why this is commented out by default. Remove the comment lines with care.
+#        @app.route('/setwebreplpw')
+#        async def set_webrepl_password(request):
+#            return get_json(self._set_webrepl_password(request))
 
         @app.route('/')
         @app.route('/<path:path>')
