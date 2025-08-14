@@ -77,7 +77,7 @@ class LoaderBase(MCUBase):
         entries = os.listdir(searchPath)
         for entry in entries:
             fullPath = os.path.join(searchPath, entry)
-            if os.path.isfile(fullPath):
+            if os.path.isfile(fullPath) and fullPath not in fileList:
                 fileList.append(fullPath)
 
             elif os.path.isdir(fullPath):
@@ -544,50 +544,50 @@ class LoaderBase(MCUBase):
            @param loadMPYFiles If True (default) we compile the .py files to .mpy files and
                                load these. This saves significant MCU flash memory space.
                                If False then the python files are loaded."""
+        # Ensure we don't have any mpy files at or below the app root folder.
+        self.deleteLocalMPYFiles()
 
         if loadMPYFiles:
             fileList = []
             LoaderBase.GetFiles(fileList, self._appRootFolder)
             pyFileList = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION)
+            # Build a list of files that are not *.py or *.mpy files.
+            nonPyFileList = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION, include=False)
+            nonPyFileList = LoaderBase.GetSubFileList(nonPyFileList, LoaderBase.MICROPYTHON_FILE_EXTENSION, include=False)
+
             mainPy = os.path.join(self._appRootFolder, LoaderBase.MAIN_PY_FILE)
             bootPy = os.path.join(self._appRootFolder, LoaderBase.BOOT_PY_FILE)
-            # Ensure we have the main python file
-            if mainPy not in pyFileList:
-                raise Exception(f"{LoaderBase.MAIN_PY_FILE} file not found in {self._appRootFolder}")
-            mpyFileList = self._convertToMPY(pyFileList)
-            # Do Not load the .py files onto the MCU only the .mpy and other files
-            filesToLoad = LoaderBase.GetSubFileList(fileList, LoaderBase.PYTHON_FILE_EXTENSION, include=False)
-            filesToLoad = filesToLoad + mpyFileList
-            # Ensure we load the main python file
-            filesToLoad.insert(0, mainPy)
-            # Remove the main.mpy file from the  if present
-            mainMpyFile = os.path.join(self._appRootFolder, LoaderBase.MAIN_MPY_FILE)
-            self._removeFileFromList(mainMpyFile, filesToLoad)
-
-            # If we have a boot.py file ensure it is in the list of files to load
-            if os.path.isfile(bootPy):
-                filesToLoad.insert(0, bootPy)
-            # Remove the boot.mpy file from the list if present
-            bootMpyFile = os.path.join(self._appRootFolder, LoaderBase.BOOT_MPY_FILE)
-            self._removeFileFromList(bootMpyFile, filesToLoad)
-
-            # Remove the webrepl_cfg.mpy file from the list if present
-            webReplCfgMpyFile = os.path.join(self._appRootFolder, LoaderBase.WEBREPL_CFG_MPY_FILE)
-            self._removeFileFromList(webReplCfgMpyFile, filesToLoad)
-
-            # Load the webrepl_cfg.py if it exists locally
             webReplPyFile = os.path.join(self._appRootFolder, LoaderBase.WEBREPL_CFG_PY_FILE)
+
+            if not os.path.isfile(mainPy):
+                raise Exception(f"{mainPy} file not found.")
+            leaveFileList = [mainPy]
+
+            if os.path.isfile(bootPy):
+                leaveFileList.append(bootPy)
+
             if os.path.isfile(webReplPyFile):
-                if webReplPyFile not in filesToLoad:
-                    filesToLoad.append(webReplPyFile)
+                leaveFileList.append(webReplPyFile)
+
+            self._removeFilesFromList(leaveFileList, pyFileList)
+
+            mpyFileList = self._convertToMPY(pyFileList)
+
+            filesToLoad = leaveFileList + nonPyFileList + mpyFileList
 
         else:
-            # Ensure we don't have any mpy files at or below the app root folder.
-            self.deleteLocalMPYFiles()
             filesToLoad = []
             # Load all files in and under the app root folder to the MCU
             LoaderBase.GetFiles(filesToLoad, self._appRootFolder)
+
         return filesToLoad
+
+    def _removeFilesFromList(self, delFileList, mainFileList):
+        """@brief Remove one or more files from a list of files.
+           @param delFileList The list of files to be removed from the mainFileList.
+           @param mainFileList The list of files from which the above file/s are to be removed."""
+        for delFile in delFileList:
+            self._removeFileFromList(delFile, mainFileList)
 
     def _removeFileFromList(self, theFile, theList):
         """@brief Remove a file from a list of files.
