@@ -219,7 +219,7 @@ class WiFi(object):
             sleep(0.1)
             self._pat_wdt()
 
-            # We flash the Wifi LED on for about 100 MS every 2 seconds if attempting to connect to 
+            # We flash the Wifi LED on for about 100 MS every 2 seconds if attempting to connect to
             # a WiFi network in order to give the user some feedback.
             if time() >= led_flash_time:
                 self._wifi_led.value(True)
@@ -259,7 +259,7 @@ class WiFi(object):
             # be configured via bluetooth.
             # Import bluetooth here so that we don't have bluetooth in memory when a normal boot occurs
             # to save the ~ 37 KB of memory used by bluetooth
-            from lib.bluetooth import BlueTooth
+            from lib.pja_bluetooth import BlueTooth
             bt_led_pin = -1
             try:
                 _bt_led_pin = int(self._bluetooth_led_pin)
