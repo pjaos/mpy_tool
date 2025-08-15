@@ -60,6 +60,7 @@ class GUIServer(TabbedNiceGui):
     DEFAULT_CODE_PATH = "DEFAULT_CODE_PATH"
     FILENAME1 = "FILENAME1"
     COPY_TO_EDITOR = "COPY_TO_EDITOR"
+    RUN_MAIN_SW_STATE = "RUN_MAIN_SW_STATE"
 
     DEFAULT_CONFIG = {WIFI_SSID: "",
                       WIFI_PASSWORD: "",
@@ -78,7 +79,8 @@ class GUIServer(TabbedNiceGui):
                       SETUP_WIFI_IF: USB,
                       DEFAULT_CODE_PATH: os.path.expanduser("~"),
                       FILENAME1: "main.py",
-                      COPY_TO_EDITOR: True}
+                      COPY_TO_EDITOR: True,
+                      RUN_MAIN_SW_STATE: True}
 
     DESCRIP_STYLE_1 = '<span style="font-size:1.5em;">'
     SERIAL_PORT_OPEN = 'SERIAL_PORT_OPEN'
@@ -759,7 +761,8 @@ class GUIServer(TabbedNiceGui):
             with ui.row():
                 ser_get_file = self._cfgMgr.getAttr(GUIServer.FILENAME1)
                 self._serialRunFileInput = ui.input('Filename', value=ser_get_file).tooltip("This python file must have a main() method.")
-                self._serialRunMainSwitch = ui.switch("Run main.py", value=False, on_change=self._serialRunMainSwitchChanged).style('width: 200px;').tooltip("If selected 'CTRL D' is sent on the serial port which causes main.py to be executed.")
+                run_man_sw_state = self._cfgMgr.getAttr(GUIServer.RUN_MAIN_SW_STATE)
+                self._serialRunMainSwitch = ui.switch("Run main.py", value=run_man_sw_state, on_change=self._serialRunMainSwitchChanged).style('width: 200px;').tooltip("If selected 'CTRL D' is sent on the serial port which causes main.py to be executed.")
             with ui.row():
                 ui.button("Ok", on_click=lambda: self._runMCUFile())
                 ui.button("Cancel", on_click=lambda: (self._serialRunFileDialog.close()))
@@ -772,6 +775,9 @@ class GUIServer(TabbedNiceGui):
             self._serialRunFileInput.enable()
 
     def _runMCUFile(self):
+        # Save the state of the 'Run main.py' switch.
+        self._cfgMgr.addAttr(GUIServer.RUN_MAIN_SW_STATE, self._serialRunMainSwitch.value)
+        self._saveConfig()
         self._serialRunFileDialog.close()
         self._updateFilename1(self._serialRunFileInput.value)
         if self._serialCheckRepl():
