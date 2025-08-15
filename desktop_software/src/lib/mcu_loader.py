@@ -672,10 +672,12 @@ class USBLoader(LoaderBase):
     PICO_ERASE_IMAGE                = "flash_nuke.uf2"
     PICO_MICROPYTHON_IMAGE          = "firmware.uf2"
     ESP32_IMAGE_FOLDER_NAME         = "esp32_flash_images"
-    ESP32_MICROPYTHON_IMAGE         = "firmware.bin"
-    ESP32C3_BOOTLOADER_IMAGE        = "bootloader.bin"
-    ESP32C3_MICROPYTHON_IMAGE       = "micropython.bin"
-    ESP32C3_PARTITION_TABLE_IMAGE   = "partition-table.bin"
+    ESP32_BOOTLOADER_IMAGE          = "bootloader.bin"
+    ESP32_MICROPYTHON_IMAGE         = "micropython.bin"
+    ESP32_PARTITION_TABLE_IMAGE     = "partition-table.bin"
+    ESP32C3_BOOTLOADER_IMAGE        = ESP32_BOOTLOADER_IMAGE
+    ESP32C3_MICROPYTHON_IMAGE       = ESP32_MICROPYTHON_IMAGE
+    ESP32C3_PARTITION_TABLE_IMAGE   = ESP32_PARTITION_TABLE_IMAGE
     ESP32C6_BOOTLOADER_IMAGE        = ESP32C3_BOOTLOADER_IMAGE
     ESP32C6_PARTITION_TABLE_IMAGE   = ESP32C3_PARTITION_TABLE_IMAGE
     ESP32C6_MICROPYTHON_IMAGE       = ESP32C3_MICROPYTHON_IMAGE
@@ -748,13 +750,17 @@ class USBLoader(LoaderBase):
         return imageFolder
 
     @staticmethod
-    def GetESP32MicroPythonFile():
-        """@return The esp32 image file."""
+    def GetESP32MicroPythonFiles():
+        """@return A Tuple containing the files to load to an original ESP32 (tensilica)."""
         folder = os.path.join(USBLoader.GetESP32ImagesFolder(), 'esp32')
+        bootLoaderFile = os.path.join(folder, USBLoader.ESP32_BOOTLOADER_IMAGE)
+        partionTableFile = os.path.join(folder, USBLoader.ESP32_PARTITION_TABLE_IMAGE)
         microPythonFile = os.path.join(folder, USBLoader.ESP32_MICROPYTHON_IMAGE)
-        if not os.path.isfile(microPythonFile):
-            raise Exception(f"{microPythonFile} file not found.")
-        return microPythonFile
+        fileList = (bootLoaderFile, partionTableFile, microPythonFile)
+        for _file in fileList:
+            if not os.path.isfile(_file):
+                raise Exception(f"{_file} file not found.")
+        return fileList
 
     @staticmethod
     def GetESP32C3MicroPythonFiles():
@@ -1152,7 +1158,21 @@ class USBLoader(LoaderBase):
         self.info("Loading MicroPython onto an esp32 MCU.")
         serialPortDevice = self._getSerialPort()
         esp32_type = self._get_esp32_type()
-        if esp32_type == USBLoader.ESP32C3_MCU_TYPE:
+        if esp32_type == USBLoader.ESP32_MCU_TYPE:
+            bootloader_file, partitiontable_file, micropython_file = USBLoader.GetESP32MicroPythonFiles()
+            # Dummy first argument, esptool
+            args = ['esptool',
+                    '--chip', 'esp32',
+                    '-p', f'{serialPortDevice}',
+                    '-b', '460800',
+                    '--before', 'default_reset',
+                    '--after', 'hard_reset',
+                    'write_flash', '-z',
+                    '0x1000', f'{bootloader_file}',
+                    '0x8000', f'{partitiontable_file}',
+                    '0x10000', f'{micropython_file}']
+
+        elif esp32_type == USBLoader.ESP32C3_MCU_TYPE:
             bootloader_file, partitiontable_file, micropython_file = USBLoader.GetESP32C3MicroPythonFiles()
             # Dummy first argument, esptool
             args = ['esptool',
@@ -1185,15 +1205,6 @@ class USBLoader(LoaderBase):
                     '0x0', f'{bootloader_file}',
                     '0x8000', f'{partitiontable_file}',
                     '0x10000', f'{micropython_file}']
-
-        else:
-            microPythonImageFile = USBLoader.GetESP32MicroPythonFile()
-            # Dummy first argument, esptool
-            args = ['esptool.py',
-                    '-p', f'{serialPortDevice}',
-                    'write_flash', '0x1000',
-                    f'{microPythonImageFile}'
-            ]
 
         self._run_esptool_capture(args)
 
