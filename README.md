@@ -202,6 +202,12 @@ As above but with a webserver. Click [here](mcu_template_software/examples/proje
 - Example 5
 As above but with the ability to respond to are you there broadcast messages with stats in JSON format. Click [here](mcu_template_software/examples/project_template_5/README.md) for more info.
 
+- Example 6
+As above but with the ability to connect to a WebREPL prompt using a browser. Click [here](mcu_template_software/examples/project_template_6/README.md) for more info.
+
+- Example 7
+This has less functionality than the previous example. It allows the user to setup the WiFi using USB or bluetooth connections. Once connected to the WiFi
+the WebREPL interface is available. Click [here](mcu_template_software/examples/project_template_7/README.md) for more info.
 
 ## Installing software onto a new MCU
 
@@ -275,7 +281,7 @@ You must have bluetooth enabled on your machine to be able to configure the MCU 
 
 - Select the Bluetooth radio button
 - Select the SETUP WIFI button
-- A dialog box is displayed telling you to hold down the WiFi button on the MCU until the WiFi LED flashes. If you have just used the INSTALL tab to load software onto an MCU then it will be in this state, ready to setup the WiFi. 
+- A dialog box is displayed telling you to hold down the WiFi button on the MCU until the WiFi LED flashes. If you have just used the INSTALL tab to load software onto an MCU then it will be in this state, ready to setup the WiFi.
 
 See the mcu_template_software/examples/project_template_4/README.md or mcu_template_software/examples/project_template_5/README.md files for details of the GPIO pins allocated for the WiFi button and the WiFi indicator LED.
 
@@ -336,10 +342,10 @@ INFO:  Upgrade complete.
 ## Resetting the WiFi configuration
 
 ### Via the app
-The mpy_tool_gui app allows you to reset the WiFi configuration if the MCU is currently connected to the WiFi network. 
+The mpy_tool_gui app allows you to reset the WiFi configuration if the MCU is currently connected to the WiFi network.
 
 - Select the OTA (OVER THE AIR) tab
-- Enter the Device IP address 
+- Enter the Device IP address
 - Select the RESET WIFI CONFIGURATION button.
 
 The Message log should then show messages similar to those shown below
@@ -394,7 +400,7 @@ MCU serial port
 HW Reset ESP32
 Text to send
 Message Log
-INFO:  /dev/ttyACM0: 
+INFO:  /dev/ttyACM0:
 MPY: soft reboot
 DEBUG: active_app=1
 INFO:  /dev/ttyACM0: INFO:  Started app
