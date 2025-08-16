@@ -348,9 +348,6 @@ class GUIServer(TabbedNiceGui):
             if self._eraseMCUFlashInput.value and not self._loadMicroPythonInput.value and self._loadAppInput.value:
                 self._loadMicroPythonInput.value = True
 
-            if self._loadMicroPythonInput.value and self._mcuTypeSelect.value == LoaderBase.ESP32C6_MCU_TYPE:
-                ui.notify("Note that ESP32C6 MicroPython is still under development. Some features don't work, E.G machine.Timer in the version to be loaded.", type='warning')
-
             # In this case we expect MicroPython to have been loaded to the MCU previously.
             if not self._eraseMCUFlashInput.value and not self._loadMicroPythonInput.value:
                 self._startInstallThread()
