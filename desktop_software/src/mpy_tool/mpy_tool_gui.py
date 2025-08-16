@@ -125,6 +125,7 @@ class GUIServer(TabbedNiceGui):
         self._eraseMCUFlashInput = None
         self._serialTXQueue = Queue()
         self._serialRXQueue = None
+        self._ser = None
         self._serialRXQueueLock = threading.Lock()
         self._filePath = os.path.expanduser("~")
         self._loadConfig()
@@ -329,8 +330,8 @@ class GUIServer(TabbedNiceGui):
         """@brief Process button click.
            @param event The button event."""
         if self._is_serial_port_open():
-            ui.notify('The serial port is open in the SERIAL PORT tab. Close it and try again.', type='negative')
-            return
+            if self._setSerialPortClosed():
+                ui.notify('The serial port was open in the SERIAL PORT tab. It has been closed in order to proceed with the install process.', type='warning')
 
         self._clearMessages()
         mcuType = self._mcuTypeSelect.value
@@ -410,11 +411,12 @@ class GUIServer(TabbedNiceGui):
 
         if found:
             try:
-                ser = serial.serial_for_url(serialPortDev, do_not_open=False, exclusive=True)
-                ser.close()
+                self._ser = serial.serial_for_url(serialPortDev, do_not_open=False, exclusive=True)
+                self._ser.close()
 
             except serial.serialutil.SerialException:
                 raise Exception(f"{serialPortDev} serial port is not available as it's in use.")
+            self._ser = None
 
         else:
             raise Exception(f"{serialPortDev} appears to be in use.")
@@ -1095,11 +1097,24 @@ class GUIServer(TabbedNiceGui):
         msgDict = {GUIServer.SERIAL_PORT_OPEN: open}
         self.updateGUI(msgDict)
 
+    def _ensure_serial_port_is_closed(self):
+        """@brief Ensure the serial port is closed.
+           @return True if the serial port was closed."""
+        closed = False
+        if self._ser:
+            try:
+                self._ser.close()
+                closed = True
+            except Exception:
+                ser = None
+        return closed
+
     def _viewSerialPortData(self, resetESP32):
         """@brief Read data from the available serial port and display it.
            @param resetESP32 If True The perform a hardware reset using the RTS/DTR control signals."""
         try:
-            ser = None
+            self._ensure_serial_port_is_closed()
+
             usbLoader = None
             self._viewSerialRunning = True
             self.info("Checking for connected MCU's...")
@@ -1112,9 +1127,9 @@ class GUIServer(TabbedNiceGui):
                     usbLoader = USBLoader(mcuType, uio=self)
                     try:
                         if resetESP32:
-                            ser = usbLoader.esp32HWReset(closeSer=False)
+                            self._ser = usbLoader.esp32HWReset(closeSer=False)
                         else:
-                            ser = usbLoader.openFirstSerialPort()
+                            self._ser = usbLoader.openFirstSerialPort()
 
                     except serial.serialutil.SerialException as ex:
                         if str(ex).find('Could not exclusively lock port'):
@@ -1126,8 +1141,8 @@ class GUIServer(TabbedNiceGui):
                     try:
                         try:
                             while self._viewSerialRunning:
-                                while ser.in_waiting > 0:
-                                    bytesRead = ser.read(ser.in_waiting)
+                                while self._ser.in_waiting > 0:
+                                    bytesRead = self._ser.read(self._ser.in_waiting)
                                     sRead = bytesRead.decode("utf-8", errors="ignore")
                                     if len(sRead) > 0:
                                         self._serialRXQueueLock.acquire()
@@ -1143,7 +1158,7 @@ class GUIServer(TabbedNiceGui):
 
                                 while not self._serialTXQueue.empty():
                                     txStr = self._serialTXQueue.get()
-                                    ser.write(txStr.encode())
+                                    self._ser.write(txStr.encode())
 
                                 # Ensure we don't spinlock
                                 sleep(0.1)
@@ -1153,8 +1168,8 @@ class GUIServer(TabbedNiceGui):
                             pass
 
                     finally:
-                        if ser:
-                            ser.close()
+                        if self._ser:
+                            self._ser.close()
                             ser = None
                             if usbLoader:
                                 self.info(f"Closed {usbLoader._serialPort}")
@@ -1164,12 +1179,10 @@ class GUIServer(TabbedNiceGui):
                 sleep(0.1)
 
         finally:
-            if ser:
-                ser.close()
-                ser = None
-                if usbLoader:
-                    self.info(f"Closed {usbLoader._serialPort}")
-                usbLoader = None
+            self._ensure_serial_port_is_closed()
+            if usbLoader:
+                self.info(f"Closed {usbLoader._serialPort}")
+            usbLoader = None
             self._sendSerialPortOpen(False)
             self._sendEnableAllButtons(True)
 
@@ -1200,8 +1213,11 @@ class GUIServer(TabbedNiceGui):
         self._setSerialPortClosed()
 
     def _setSerialPortClosed(self):
+        """@brief Set the serial port to the closed state.
+           @return True if the serial port was closed."""
         self._update_serial_port_open_buttons(False)
         self._viewSerialRunning = False
+        return self._ensure_serial_port_is_closed()
 
     def _initMemMonTab(self):
         """@initialise the memory monitor tab."""
@@ -1654,9 +1670,9 @@ class GUIServerEXT1(GUIServer):
     def _startWifiSetup(self):
         """@brief Called to start the process of setting up the WiFi network."""
         if self._wifi_setup_radio.value == GUIServerEXT1.USB:
-            if self._is_serial_port_open():
-                ui.notify('The serial port is open in the SERIAL PORT tab. Close it and try again.', type='negative')
-                return
+            if self._setSerialPortClosed():
+                ui.notify('The serial port was open in the SERIAL PORT tab. It has been closed in order to proceed with the WiFi setup process.', type='warning')
+
             self._usbWiFiDialog1.open()
 
         elif self._wifi_setup_radio.value == GUIServerEXT1.BLUETOOTH:
