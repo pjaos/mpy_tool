@@ -39,10 +39,6 @@ class BaseMachine(UOBase):
             gpio_pin = override
 
         else:
-            # !!!
-            # Currently MicroPython for the ESP32C6 is under development and the
-            # image of MicroPython in this tool returns ESP32
-            # rather than ESP32C6 for esp32c6 HW.
             if 'ESP32C6' in mcu:
                 gpio_pin = 9
 
@@ -76,10 +72,6 @@ class BaseMachine(UOBase):
             gpio_pin = override
 
         else:
-            # !!!
-            # Currently MicroPython for the ESP32C6 is under development and the
-            # image of MicroPython in this tool returns ESP32
-            # rather than ESP32C6 for esp32c6 HW.
             if 'ESP32C6' in mcu:
                 gpio_pin = 8
 
@@ -104,7 +96,7 @@ class BaseMachine(UOBase):
            @param wifi_led_gpio   The GPIO pin connected to an LED that turns on when the WiFi is connected to the WiFi network as an STA.
                                   See _get_wifi_led_gpio() for more info.
            @param bluetooth_led_gpio The GPIO pin connected to an LED that indicates if bluetooth is enabled. Typically a blue LED.
-                                     If defined this led will flash when bluetooth is enabled and turn ON when a bluetooth client is connected.  
+                                     If defined this led will flash when bluetooth is enabled and turn ON when a bluetooth client is connected.
            """
         wifi_led_gpio = self._get_wifi_led_gpio(override=wifi_led_gpio)
         wifi_setup_gpio = self._get_wifi_setup_gpio(override=wifi_setup_gpio)
@@ -138,7 +130,7 @@ class BaseMachine(UOBase):
 
     async def _check_factory_Defaults_task(self):
         """@brief This task checks for the button press and if held down
-                  for the required period of time resets the device to factory 
+                  for the required period of time resets the device to factory
                   defaults and reboots."""
         while True:
             if self._wifi.is_factory_reset_required():
