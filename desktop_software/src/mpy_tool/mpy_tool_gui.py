@@ -126,6 +126,8 @@ class GUIServer(TabbedNiceGui):
         self._serialTXQueue = Queue()
         self._serialRXQueue = None
         self._ser = None
+        self._wifi_ssid = ""
+        self._wifi_password = ""
         self._serialRXQueueLock = threading.Lock()
         self._filePath = os.path.expanduser("~")
         self._loadConfig()
@@ -475,6 +477,8 @@ class GUIServer(TabbedNiceGui):
             self._cfgMgr.load()
         except Exception:
             pass
+        self._wifi_ssid = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_SSID)
+        self._wifi_password = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_PASSWORD)
 
     def _initWiFiTab(self):
         """@brief Create the Wifi tab contents."""
@@ -1539,10 +1543,10 @@ class GUIServerEXT1(GUIServer):
         """@brief Save some parameters to a local config file."""
         if self._app_main_py_input:
             self._cfgMgr.addAttr(GUIServer.MCU_MAIN_PY, self._app_main_py_input.value)
-        if self._wifiSSIDUSBInput:
-            self._cfgMgr.addAttr(GUIServerEXT1.WIFI_SSID, self._wifiSSIDUSBInput.value)
-        if self._wifiPasswordUSBInput:
-            self._cfgMgr.addAttr(GUIServerEXT1.WIFI_PASSWORD, self._wifiPasswordUSBInput.value)
+
+        self._cfgMgr.addAttr(GUIServerEXT1.WIFI_SSID, self._wifi_ssid)
+        self._cfgMgr.addAttr(GUIServerEXT1.WIFI_PASSWORD, self._wifi_password)
+
         if self._deviceIPAddressInput1:
             self._cfgMgr.addAttr(GUIServerEXT1.DEVICE_ADDRESS, self._deviceIPAddressInput1.value)
         if self._wifi_setup_radio:
@@ -1562,14 +1566,231 @@ class GUIServerEXT1(GUIServer):
 
         self._cfgMgr.store()
 
+    def _openUSBWifiDialog(self):
+        """@brief Open the first dialog to configure WiFi over a USB connection.
+                  The code to setup WiFi over a USB connection is encapsulated in this method."""
+
+        def saveEnteredUSBWiFiDialogValues(self):
+            self._copyWifiParams(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)
+            self._saveConfig()
+
+        def usbSetWiFiNetwork(self, wifiSSID, wifiPassword):
+            """@brief Set the Wifi network on a YDev device over a USB connection to the YDev unit.
+            @param wifiSSID The WiFi SSID to set.
+            @param wifiPassword The WiFi password to set."""
+            try:
+                try:
+                    if len(wifiSSID) == 0:
+                        self.error("A WiFi SSID is required.")
+
+                    elif len(wifiPassword) == 0:
+                        self.error("A WiFi password is required.")
+
+                    else:
+                        self._setupWiFi(wifiSSID, wifiPassword)
+
+                except Exception as ex:
+                    self.error(str(ex))
+
+            finally:
+                self._sendEnableAllButtons(True)
+
+        def startUsbWifiSetupThread(self):
+            """@brief Called to start the worker thread to setup the MCU WiFi over a USB connection.
+            @param event The button event."""
+            err_msg = self._get_wifi_ssid_passwd_err(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)
+            if err_msg:
+                ui.notify(err_msg, type='negative')
+
+            else:
+                self._initTask()
+                duration = 300
+                self._startProgress(durationSeconds=duration)
+                threading.Thread(target=usbSetWiFiNetwork, args=(self, self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)).start()
+
+        with ui.dialog() as usbWiFiDialog2, ui.card():
+            with ui.column():
+
+                self._wifiSSIDUSBInput = ui.input(label='WiFi SSID')
+                ssid = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_SSID)
+                if ssid:
+                    self._wifiSSIDUSBInput.value = ssid
+
+                self._wifiPasswordUSBInput = ui.input(label='WiFi Password', password=True, password_toggle_button=True)
+                passwd = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_PASSWORD)
+                if passwd:
+                    self._wifiPasswordUSBInput.value = passwd
+
+            with ui.row():
+                ui.button("Ok", on_click=lambda: (saveEnteredUSBWiFiDialogValues(self), usbWiFiDialog2.close(), startUsbWifiSetupThread(self),))
+                ui.button("Cancel", on_click=lambda: (saveEnteredUSBWiFiDialogValues(self), usbWiFiDialog2.close(), self._sendEnableAllButtons(True)))
+
+        # Create the dialog
+        with ui.dialog() as usbWiFiDialog1, ui.card():
+            ui.label("A USB cable must be connected between this PC and the MCU device to setup it's WiFi.\n\nContinue ?").style('white-space: pre-wrap;')
+            with ui.row():
+                ui.button("Ok", on_click=lambda: (usbWiFiDialog1.close(), usbWiFiDialog2.open(),))
+                ui.button("Cancel", on_click=lambda: (usbWiFiDialog1.close(), self._sendEnableAllButtons(True)))
+
+        usbWiFiDialog1.open()
+
+    # This method is reused when checking the ssid and password for setting up WiFi via bluetooth.
+    def _get_wifi_ssid_passwd_err(self, ssid, passwd):
+        """@brief Get a user error message for ssid and password.
+           @param ssid The WiFi ssid.
+           @param passwd The WiFi password.
+           @return The user error message or None if the ssid and password are set."""
+        err_msg = None
+        if not ssid and not passwd:
+            err_msg = "A WiFi SSID and password must be entered."
+        elif not ssid:
+            err_msg = "A WiFi SSID must be entered."
+        elif not passwd:
+            err_msg = "A WiFi password must be entered."
+        return err_msg
+
+    # This method is reused when checking the ssid and password for setting up WiFi via bluetooth.
+    def _copyWifiParams(self, ssid, password):
+        """@brief Copy same ssid and password to all UI elements used to enter these parameters.
+           @param ssid The WiFi network/SSID.
+           @param password The WiFi password."""
+        self._wifi_ssid = ssid
+        self._wifi_password = password
+
+    def _openBTWifiDialog(self):
+        """@brief Open the first dialog to configure WiFi over a bluetooth connection.
+                  The code to setup WiFi over a bluetooth connection is encapsulated in this method."""
+
+        def saveEnteredBTWiFiDialogValues(self):
+            self._copyWifiParams(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)
+            self._saveConfig()
+
+        def btSetWiFiNetworkThread(self, ssid, password):
+            """@brief A worker thread responsible for configuring the YDev Wifi SSID and password over bluetooth.
+            @param ssid The WiFi SSID.
+            @param password The WiFi password."""
+            waitingForIP = False
+            try:
+
+                ct6Address = self._btMacAddress
+                yDevBlueTooth = YDevBlueTooth(uio=self)
+                self.info("Setting up YDev WiFi...")
+                yDevBlueTooth.setup_wifi(ct6Address, ssid, password)
+                self.info("Waiting for YDev device to restart...")
+                waitingForIP = True
+                yDevBlueTooth.waitfor_device(ct6Address)
+                self.info("Waiting for YDev device WiFi to be served an IP address by the DHCP server...")
+                ipAddress = yDevBlueTooth.get_ip(ct6Address)
+                if ct6Address:
+                    waitingForIP = False
+                    self.info(f"YDev device IP address = {ipAddress}")
+                    # Send a message to set the YDev device IP address in the GUI
+                    self._setYDevIPAddress(ipAddress)
+                    self.info("Turning off bluetooth interface on YDev device.")
+                    yDevBlueTooth.disable_bluetooth(ct6Address)
+                    self.info("Device now restarting...")
+                    sleep(2)
+                    self._waitForPingSuccess(ipAddress)
+                    self.infoDialog("Device WiFi setup complete.")
+
+            except Exception as ex:
+                error = str(ex)
+                if error:
+                    self.error(error)
+
+            finally:
+                self._sendEnableAllButtons(True)
+
+            # Report a more useful user msg
+            if waitingForIP:
+                self.error(f"YDev device failed to connect to WiFi network ({ssid}). Check the ssid and password.")
+
+        def startBTWifiSetupThread(self):
+            """@brief Called to start the worker thread to setup the YDev WiFi over a Bluetooth connection.
+            @param event The button event."""
+            err_msg = self._get_wifi_ssid_passwd_err(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)
+            if err_msg:
+                ui.notify(err_msg, type='negative')
+
+            else:
+                self._setExpectedProgressMsgCount(9, 20)
+                threading.Thread(target=btSetWiFiNetworkThread, args=(self, self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)).start()
+
+        def startBluetoothWifiSetup(self):
+            """@brief Start attempting to setup the YDev WiFi settings using a bluetooth connection to the YDev device."""
+            self._initTask()
+            self._saveConfig()
+            duration = 300
+            self._startProgress(durationSeconds=duration)
+            threading.Thread(target=startBluetoothWifiSetupThread, args=(self,)).start()
+
+        def startBluetoothWifiSetupThread(self):
+            """@brief A worker thread that sets up the WiFi interface over a bluetooth connection to the YDev device."""
+            try:
+                if YDevBlueTooth.IsBluetoothEnabled():
+                    self.info("Scanning for YDev devices via bluetooth...")
+                    ct6DevList = YDevBlueTooth.ScanYDev()
+                    if ct6DevList:
+                        if len(ct6DevList) == 1:
+                            bluetoothDev = ct6DevList[0]
+                            self.info(f"Detected YDev unit (address = {bluetoothDev.address}).")
+                            self.info("YDev unit is now performing a WiFi network scan...")
+                            yDevBlueTooth = YDevBlueTooth(uio=self)
+                            networkDicts = yDevBlueTooth.wifi_scan(bluetoothDev.address)
+                            # This should open a dialog to allow the user to setup the WiFi
+                            msgDict = {GUIServerEXT1.BT_MAC_ADDRESS: bluetoothDev.address,
+                                    GUIServerEXT1.YDEV_WIFI_SCAN_COMPLETE: networkDicts}
+                            self.updateGUI(msgDict)
+
+                        else:
+                            self.errorDialog("More than one YDev device found. Turn off other devices to leave one powered on and try again.")
+
+                    else:
+                        self.errorDialog("Failed to detect a YDev device via bluetooth.")
+
+                else:
+                    self.errorDialog("Bluetooth is not available on this computer. Please enable bluetooth and try again.")
+
+            except Exception as ex:
+                self.error(str(ex))
+
+            finally:
+                self._sendEnableAllButtons(True)
+
+        def ssidDropDownSelected(self, value):
+            """@bried Update the selected WiFi SSID."""
+            self._wifiSSIDBTInput.value = value
+
+        # Create the dialog
+        with ui.dialog() as bluetoothWiFiDialog1, ui.card():
+            ui.label("Hold the WiFi button down on the MCU device until it restarts and the LED/s flash.\n\nContinue ?").style('white-space: pre-wrap;')
+            with ui.row():
+                ui.button("Ok", on_click=lambda: (bluetoothWiFiDialog1.close(), startBluetoothWifiSetup(self),))
+                ui.button("Cancel", on_click=lambda: (bluetoothWiFiDialog1.close(), self._sendEnableAllButtons(True)))
+
+        with ui.dialog() as btWiFiDialog2, ui.card():
+            with ui.column():
+                self._ssidDropDown = ui.select([], label="WiFi SSID's Found.").style('width: 200px;')
+                self._ssidDropDown.on('popup-hide', lambda: ssidDropDownSelected(self, self._ssidDropDown.value))
+                self._wifiSSIDBTInput = ui.input(label='WiFi SSID').style('width: 200px;')
+                ssid = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_SSID)
+                if ssid:
+                    self._wifiSSIDBTInput.value = ssid
+
+                self._wifiPasswordBTInput = ui.input(label='WiFi Password', password=True, password_toggle_button=True).style('width: 200px;')
+                passwd = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_PASSWORD)
+                if passwd:
+                    self._wifiPasswordBTInput.value = passwd
+
+            with ui.row():
+                ui.button("Ok", on_click=lambda: (saveEnteredBTWiFiDialogValues(self), btWiFiDialog2.close(), startBTWifiSetupThread(self),))
+                ui.button("Cancel", on_click=lambda: (saveEnteredBTWiFiDialogValues(self), btWiFiDialog2.close(), self._sendEnableAllButtons(True)))
+            self._btWiFiDialog2 = btWiFiDialog2
+
+        bluetoothWiFiDialog1.open()
+
     def _initWiFiTab(self):
         """@brief Create the Wifi tab contents."""
-        # Init all the dialogs used in the WiFi setup process.
-        self._initUsbWiFiDialog1()
-        self._initUsbWiFiDialog2()
-        self._initBluetoothWiFiDialog1()
-        self._initBluetoothWiFiDialog2()
-
         markDownText = """
         <span style="font-size:1.5em;">Set the WiFi ssid and password to connect your MCU to a WiFi network via either a USB or Bluetooth connection.
         """
@@ -1610,145 +1831,16 @@ class GUIServerEXT1(GUIServer):
         self._setInitWiFiState()
         self._saveConfig()
 
-    def _initUsbWiFiDialog1(self):
-        """@brief A dialog displayed as step 1 in the WiFi setup process when using a USB interface to talk to the MCU device."""
-        # Create the dialog
-        with ui.dialog() as self._usbWiFiDialog1, ui.card():
-            ui.label("A USB cable must be connected between this PC and the MCU device to setup it's WiFi.\n\nContinue ?").style('white-space: pre-wrap;')
-            with ui.row():
-                ui.button("Ok", on_click=lambda: (self._usbWiFiDialog1.close(), self._usbWiFiDialog2.open(),))
-                ui.button("Cancel", on_click=lambda: (self._usbWiFiDialog1.close(), self._sendEnableAllButtons(True)))
-
-    def _initUsbWiFiDialog2(self):
-        """@brief A dialog displayed as step 2 in the WiFi setup process when using a USB interface to talk to the MCU device."""
-        with ui.dialog() as self._usbWiFiDialog2, ui.card():
-            with ui.column():
-
-                self._wifiSSIDUSBInput = ui.input(label='WiFi SSID')
-                ssid = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_SSID)
-                if ssid:
-                    self._wifiSSIDUSBInput.value = ssid
-
-                self._wifiPasswordUSBInput = ui.input(label='WiFi Password', password=True, password_toggle_button=True)
-                passwd = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_PASSWORD)
-                if passwd:
-                    self._wifiPasswordUSBInput.value = passwd
-
-            with ui.row():
-                ui.button("Ok", on_click=lambda: (self._usbWiFiDialog2.close(), self._startUsbWifiSetupThread(),))
-                ui.button("Cancel", on_click=lambda: (self._usbWiFiDialog2.close(), self._sendEnableAllButtons(True)))
-
-    def _initBluetoothWiFiDialog1(self):
-        """@brief A dialog displayed as step 1 in the WiFi setup process when using a bluetooth interface to talk to the MCU device."""
-        # Create the dialog
-        with ui.dialog() as self._bluetoothWiFiDialog1, ui.card():
-            ui.label("Hold the WiFi button down on the MCU device until it restarts and the LED/s flash.\n\nContinue ?").style('white-space: pre-wrap;')
-            with ui.row():
-                ui.button("Ok", on_click=lambda: (self._bluetoothWiFiDialog1.close(), self._startBluetoothWifiSetup(),))
-                ui.button("Cancel", on_click=lambda: (self._bluetoothWiFiDialog1.close(), self._sendEnableAllButtons(True)))
-
-    def _initBluetoothWiFiDialog2(self):
-        """@brief A dialog displayed as step 2 in the WiFi setup process when using a bluetooth interface to talk to the MCU device."""
-        with ui.dialog() as self._btWiFiDialog2, ui.card():
-            with ui.column():
-                self._ssidDropDown = ui.select([], label="WiFi SSID's Found.", on_change=lambda e: self._ssidDropDownSelected(e.value)).style('width: 200px;')
-
-                self._wifiSSIDBTInput = ui.input(label='WiFi SSID').style('width: 200px;')
-                ssid = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_SSID)
-                if ssid:
-                    self._wifiSSIDBTInput.value = ssid
-
-                self._wifiPasswordBTInput = ui.input(label='WiFi Password', password=True, password_toggle_button=True).style('width: 200px;')
-                passwd = self._cfgMgr.getAttr(GUIServerEXT1.WIFI_PASSWORD)
-                if passwd:
-                    self._wifiPasswordBTInput.value = passwd
-
-            with ui.row():
-                ui.button("Ok", on_click=lambda: (self._btWiFiDialog2.close(), self._startBTWifiSetupThread(),))
-                ui.button("Cancel", on_click=lambda: (self._btWiFiDialog2.close(), self._sendEnableAllButtons(True)))
-
     def _startWifiSetup(self):
         """@brief Called to start the process of setting up the WiFi network."""
         if self._wifi_setup_radio.value == GUIServerEXT1.USB:
             if self._setSerialPortClosed():
                 ui.notify('The serial port was open in the SERIAL PORT tab. It has been closed in order to proceed with the WiFi setup process.', type='warning')
 
-            self._usbWiFiDialog1.open()
+            self._openUSBWifiDialog()
 
         elif self._wifi_setup_radio.value == GUIServerEXT1.BLUETOOTH:
-            self._bluetoothWiFiDialog1.open()
-
-    def _usbSetWiFiNetwork(self, wifiSSID, wifiPassword):
-        """@brief Set the Wifi network on a YDev device over a USB connection to the YDev unit.
-           @param wifiSSID The WiFi SSID to set.
-           @param wifiPassword The WiFi password to set."""
-        try:
-            try:
-                if len(wifiSSID) == 0:
-                    self.error("A WiFi SSID is required.")
-
-                elif len(wifiPassword) == 0:
-                    self.error("A WiFi password is required.")
-
-                else:
-                    self._setupWiFi(wifiSSID, wifiPassword)
-
-            except Exception as ex:
-                self.error(str(ex))
-
-        finally:
-            self._sendEnableAllButtons(True)
-
-    def _startUsbWifiSetupThread(self):
-        """@brief Called to start the worker thread to setup the MCU WiFi over a USB connection.
-           @param event The button event."""
-        self._initTask()
-        self._copyWifiParams(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)
-        self._saveConfig()
-        duration = 300
-        self._startProgress(durationSeconds=duration)
-        threading.Thread(target=self._usbSetWiFiNetwork, args=(self._wifiSSIDUSBInput.value, self._wifiPasswordUSBInput.value)).start()
-
-    def _startBluetoothWifiSetup(self):
-        """@brief Start attempting to setup the YDev WiFi settings using a bluetooth connection to the YDev device."""
-        self._initTask()
-        self._saveConfig()
-        duration = 300
-        self._startProgress(durationSeconds=duration)
-        threading.Thread(target=self._startBluetoothWifiSetupThread).start()
-
-    def _startBluetoothWifiSetupThread(self):
-        """@brief A worker thread that sets up the WiFi interface over a bluetooth connection to the YDev device."""
-        try:
-            if YDevBlueTooth.IsBluetoothEnabled():
-                self.info("Scanning for YDev devices via bluetooth...")
-                ct6DevList = YDevBlueTooth.ScanYDev()
-                if ct6DevList:
-                    if len(ct6DevList) == 1:
-                        bluetoothDev = ct6DevList[0]
-                        self.info(f"Detected YDev unit (address = {bluetoothDev.address}).")
-                        self.info("YDev unit is now performing a WiFi network scan...")
-                        yDevBlueTooth = YDevBlueTooth(uio=self)
-                        networkDicts = yDevBlueTooth.wifi_scan(bluetoothDev.address)
-                        # This should open a dialog to allow the user to setup the WiFi
-                        msgDict = {GUIServerEXT1.BT_MAC_ADDRESS: bluetoothDev.address,
-                                   GUIServerEXT1.YDEV_WIFI_SCAN_COMPLETE: networkDicts}
-                        self.updateGUI(msgDict)
-
-                    else:
-                        self.errorDialog("More than one YDev device found. Turn off other devices to leave one powered on and try again.")
-
-                else:
-                    self.errorDialog("Failed to detect a YDev device via bluetooth.")
-
-            else:
-                self.errorDialog("Bluetooth is not available on this computer. Please enable bluetooth and try again.")
-
-        except Exception as ex:
-            self.error(str(ex))
-
-        finally:
-            self._sendEnableAllButtons(True)
+            self._openBTWifiDialog()
 
     def _setExpectedProgressMsgCount(self, nonDebugModeCount, debugModeCount):
         """@brief Set the number of log messages expected to complete a tasks progress.
@@ -1759,88 +1851,13 @@ class GUIServerEXT1(GUIServer):
         else:
             self._startProgress(expectedMsgCount=nonDebugModeCount)
 
-    def _copyWifiParams(self, ssid, password):
-        """@brief Copy same ssid and password to all UI elements used to enter these parameters.
-           @param ssid The WiFi network/SSID.
-           @param password The WiFi password."""
-        if self._wifiSSIDUSBInput:
-            self._wifiSSIDUSBInput.value = ssid
-
-        if self._wifiPasswordUSBInput:
-            self._wifiPasswordUSBInput.value = password
-
-        if self._wifiSSIDBTInput:
-            self._wifiSSIDBTInput.value = ssid
-
-        if self._wifiPasswordBTInput:
-            self._wifiPasswordBTInput.value = password
-
-    def _ssidDropDownSelected(self, value):
-        """@bried Update the selected WiFi SSID."""
-        self._wifiSSIDBTInput.value = value
-
     def _wifiPasswordBTInputTogglePassword(self):
         self._wifiPasswordBTInput.password = not self._wifiPasswordBTInput.password
         self._wifiPasswordBTInput.update()
 
-    def _startBTWifiSetupThread(self):
-        """@brief Called to start the worker thread to setup the YDev WiFi over a Bluetooth connection.
-           @param event The button event."""
-        self._copyWifiParams(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)
-        self._saveConfig()
-        self._setExpectedProgressMsgCount(9, 20)
-        threading.Thread(target=self._btSetWiFiNetworkThread, args=(self._wifiSSIDBTInput.value, self._wifiPasswordBTInput.value)).start()
-
     def _waitForPingSuccess(self, address):
         upgradeManager = UpgradeManager(self._mcuTypeSelect.value, uio=self)
         upgradeManager._waitForPingSuccess(address)
-
-    def _btSetWiFiNetworkThread(self, ssid, password):
-        """@brief A worker thread responsible for configuring the YDev Wifi SSID and password over bluetooth.
-           @param ssid The WiFi SSID.
-           @param password The WiFi password."""
-        waitingForIP = False
-        try:
-            if not ssid:
-                self.error("WiFi ssid not set.")
-                return
-
-            if not password:
-                self.error("WiFi password not set.")
-                return
-
-            ct6Address = self._btMacAddress
-            yDevBlueTooth = YDevBlueTooth(uio=self)
-            self.info("Setting up YDev WiFi...")
-            yDevBlueTooth.setup_wifi(ct6Address, ssid, password)
-            self.info("Waiting for YDev device to restart...")
-            waitingForIP = True
-            yDevBlueTooth.waitfor_device(ct6Address)
-            self.info("Waiting for YDev device WiFi to be served an IP address by the DHCP server...")
-            ipAddress = yDevBlueTooth.get_ip(ct6Address)
-            if ct6Address:
-                waitingForIP = False
-                self.info(f"YDev device IP address = {ipAddress}")
-                # Send a message to set the YDev device IP address in the GUI
-                self._setYDevIPAddress(ipAddress)
-                self.info("Turning off bluetooth interface on YDev device.")
-                yDevBlueTooth.disable_bluetooth(ct6Address)
-                self.info("Device now restarting...")
-                sleep(2)
-                self._waitForPingSuccess(ipAddress)
-                self.infoDialog("Device WiFi setup complete.")
-
-        except Exception as ex:
-            error = str(ex)
-            if error:
-                self.error(error)
-
-        finally:
-            self._sendEnableAllButtons(True)
-
-        # Report a more useful user msg
-        if waitingForIP:
-            self.error(f"YDev device failed to connect to WiFi network ({ssid}). Check the ssid and password.")
 
     def _copyYDevAddress(self, ipAddress):
         """@brief Copy same address to YDEV address on all tabs.
