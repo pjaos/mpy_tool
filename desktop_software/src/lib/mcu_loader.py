@@ -1168,6 +1168,9 @@ class USBLoader(LoaderBase):
                     '--before', 'default_reset',
                     '--after', 'hard_reset',
                     'write_flash', '-z',
+                    '--flash-mode', 'dio',
+                    '--flash-size', '4MB',
+                    '--flash-freq', '40m',
                     '0x1000', f'{bootloader_file}',
                     '0x8000', f'{partitiontable_file}',
                     '0x10000', f'{micropython_file}']
@@ -1181,10 +1184,10 @@ class USBLoader(LoaderBase):
                     '-b', '460800',
                     '--before', 'default_reset',
                     '--after', 'hard_reset',
-                    'write_flash',
-                    '--flash_mode', 'dio',
-                    '--flash_freq', '80m',
-                    '--flash_size', '4MB',
+                    'write_flash', '-z',
+                    '--flash-mode', 'dio',
+                    '--flash-freq', '80m',
+                    '--flash-size', '4MB',
                     '0x0', f'{bootloader_file}',
                     '0x8000', f'{partitiontable_file}',
                     '0x10000', f'{micropython_file}']
@@ -1198,10 +1201,10 @@ class USBLoader(LoaderBase):
                     '-b', '460800',
                     '--before', 'default_reset',
                     '--after', 'hard_reset',
-                    'write_flash',
-                    '--flash_mode', 'dio',
-                    '--flash_freq', '80m',
-                    '--flash_size', '4MB',
+                    'write_flash', '-z',
+                    '--flash-mode', 'dio',
+                    '--flash-freq', '80m',
+                    '--flash-size', '4MB',
                     '0x0', f'{bootloader_file}',
                     '0x8000', f'{partitiontable_file}',
                     '0x10000', f'{micropython_file}']
@@ -1431,10 +1434,11 @@ class MCULoader(LoaderBase):
             cmdList.append(f"mkdir /pyboard{folder}")
         return cmdList
 
-    def _loadFiles(self, fileList, port):
+    def _loadFiles(self, fileList, port, freeSpace=None):
         """@brief Load files onto the micro controller device.
            @param fileList The list of files to load.
-           @param port The serial port to use."""
+           @param port The serial port to use.
+           @param freeSpace If defined, the available free space in bytes."""
         cmdList = self._getMakeFolderCmdList(fileList)
         totalSizeAllFiles = 0
         srcFileList = []
@@ -1461,6 +1465,11 @@ class MCULoader(LoaderBase):
             fd.write("{}\n".format(l))
         fd.close()
         self.info(f"Size of all files to be loaded = {totalSizeAllFiles} bytes.")
+        if freeSpace is not None:
+            usedSpaceAfterXfer = freeSpace - totalSizeAllFiles
+            if usedSpaceAfterXfer < 0:
+                raise Exception(f"Unable to load files as only {freeSpace} bytes of MCU flash space available.")
+
         self.info("Loading MCU firmware. This may take several minutes...")
         cmdOutput = self._runRshellCmdFile(port, MCULoader.RSHELL_CMD_LIST_FILE)
         lines = cmdOutput.split("\n")
@@ -1519,10 +1528,10 @@ class MCULoader(LoaderBase):
         self._closeSerialPort()
 
         filesToLoad = self.getAppFileList(loadMPYFiles)
-        sizeOfAllLoadedFiles = self._loadFiles(filesToLoad, self._serialPort)
+        freeSpace = fsStats[1]
+        sizeOfAllLoadedFiles = self._loadFiles(filesToLoad, self._serialPort, freeSpace=freeSpace)
         self.deleteLocalMPYFiles()
         # Reduce the free space by the total size of the files loaded.
-        freeSpace = fsStats[1]
         fsStats[1] = freeSpace - sizeOfAllLoadedFiles
         self.rebootUnit(esp32HWReboot=True)
         return fsStats
