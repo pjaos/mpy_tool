@@ -1110,7 +1110,7 @@ class GUIServer(TabbedNiceGui):
                 self._ser.close()
                 closed = True
             except Exception:
-                ser = None
+                pass
         return closed
 
     def _viewSerialPortData(self, resetESP32):
@@ -1174,7 +1174,6 @@ class GUIServer(TabbedNiceGui):
                     finally:
                         if self._ser:
                             self._ser.close()
-                            ser = None
                             if usbLoader:
                                 self.info(f"Closed {usbLoader._serialPort}")
                             usbLoader = None
