@@ -17,9 +17,10 @@ class ServoBase:
         "MAX_ANGULAR_ROTATION",
     ]
 
-    def __init__(self, gpio_pin):
+    def __init__(self, gpio_pin, center_ref=True):
         """@brief Initialise this instance.
            @param gpio_pin The GPIO pin to use to control the servo."""
+        self._center_ref = center_ref
         for name in self.REQUIRED_PARAMS:
             value = getattr(self.__class__, name)
             if value is None:
@@ -50,23 +51,36 @@ class ServoBase:
         max_ms = cls.MAX_PULSE_WIDTH_MS
         max_angle = cls.MAX_ANGULAR_ROTATION
 
-        # ---- 0) Compute allowed angle range ----
-        half_range = max_angle / 2
-        min_angle = -half_range
-        max_angle = +half_range
+        if self._center_ref:
+            # ---- 0) Compute allowed angle range ----
+            half_range = max_angle / 2
+            min_angle = -half_range
+            max_angle = +half_range
 
-        # ---- 1) Validate input angle ----
-        if not (min_angle <= angle <= max_angle):
-            raise ValueError(
-                f"Angle {angle}° is outside valid range "
-                f"{min_angle}° to {max_angle}° for {cls.__name__}."
-            )
+            # ---- 1) Validate input angle ----
+            if not (min_angle <= angle <= max_angle):
+                raise ValueError(
+                    f"Angle {angle}° is outside valid range "
+                    f"{min_angle}° to {max_angle}° for {cls.__name__}."
+                )
+            # ---- 2) Normalise angle to -1..+1 ----
+            normalised = angle / half_range  # exactly -1..+1 now
 
-        # ---- 2) Normalise angle to -1..+1 ----
-        normalised = angle / half_range  # exactly -1..+1 now
+            # ---- 3) Map to pulse width (ms) ----
+            pulse_ms = min_ms + (normalised + 1) * (max_ms - min_ms) / 2
 
-        # ---- 3) Map to pulse width (ms) ----
-        pulse_ms = min_ms + (normalised + 1) * (max_ms - min_ms) / 2
+        else:
+            if angle < 0.0 or angle > max_angle:
+                raise ValueError(
+                    f"Angle {angle}° is outside valid range "
+                    f"0° to {max_angle}° for {cls.__name__}."
+                )
+            else:
+                if angle <= 0.0:
+                    pulse_ms = min_ms
+                else:
+                    # ---- 1) Map to pulse width (ms) ----
+                    pulse_ms = min_ms + ( (max_ms - min_ms) * ( angle / max_angle ) )
 
         # ---- 4) Convert pulse width → duty register ----
         period_ms = 1000.0 / pwm_freq             # e.g. 50 Hz → 20 ms period
@@ -117,17 +131,29 @@ class GS3630BBServo(ServoBase):
     MAX_PULSE_WIDTH_MS = 2.5
     MAX_ANGULAR_ROTATION = 180
 
-
 """
+
 # Example code
 
 from time import sleep
 
+# Move center +/- 90°
 servo_1 = GS3630BBServo(21)
 servo_1.move(-90)
 sleep(2)
 servo_1.move(90)
+
+# Move 0° - 180°
+#servo_1 = GS3630BBServo(21, center_ref=False)
+#servo_1.move(0)
+#sleep(2)
+#servo_1.move(90)
+
 sleep(2)
 servo_1.off()
 
 """
+
+
+
+
