@@ -11,7 +11,6 @@
 
 from machine import Pin, PWM
 import uasyncio as asyncio
-from time import sleep_ms
 
 
 # ================================================================
