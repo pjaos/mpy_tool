@@ -3,7 +3,7 @@
 import argparse
 
 from   lib.general import MCUBase
-from   lib.mcu_loader import USBLoader, UpgradeManager
+from   lib.mcu_loader import USBLoader, UpgradeManager, LoaderBase
 
 from   p3lib.uio import UIO
 from   p3lib.helper import logTraceBack
@@ -64,6 +64,7 @@ class MCU_Tool(MCUBase):
         parser.add_argument("-s", "--scan",       action='store_true', help="Scan for devices on the LAN/WiFi.")
         parser.add_argument("-v", "--view",       action='store_true', help="View received data on first /dev/ttyUSB* or /dev/ttyACM* serial port.")
         parser.add_argument("-d", "--debug",      action='store_true', help="Enable debugging.")
+        parser.add_argument("-c", "--copy_example",    type=int, help="Copy example code to a new project folder.")
         options = parser.parse_args()
         return options
 
@@ -78,7 +79,11 @@ def main():
 
         loadMPY = True
 
-        if options.picow:
+        if options.copy_example:
+            LoaderBase.CopyExample(uio, options.copy_example)
+            return
+
+        elif options.picow:
             mcuType = USBLoader.RPI_PICOW_MCU_TYPE
 
         elif options.pico2w:

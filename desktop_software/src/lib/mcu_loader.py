@@ -256,6 +256,41 @@ class LoaderBase(MCUBase):
 
         return  aPath.replace('\\','/')
 
+    @staticmethod
+    def CopyExample(uio, example_id, projectFolder=None):
+        """@brief Copy example code to the destination folder.
+           @param example_id This is the integer value that identifies the example code.
+                             For examples/project_template_5 this will be 5.
+           @param projectFolder The folder to copy all the example files into.
+                                If set to None the user is prompted to enter the project folder."""
+        # Check the user is running the cmd from the correct location in the git repo
+        assets_folder = get_assets_folder()
+        if not assets_folder:
+            raise Exception(f"assets folder not found.")
+
+        examples_folder = os.path.join(assets_folder, 'examples')
+        if not examples_folder or not os.path.isdir(examples_folder):
+            raise Exception(f"{examples_folder} folder not found.")
+        uio.debug(f"examples_folder={examples_folder}")
+
+        example_folder = os.path.join(examples_folder, f"project_template_{example_id}")
+        uio.debug(f"example_folder={example_folder}")
+        if not example_folder or not os.path.isdir(example_folder):
+            raise Exception(f"{example_folder} folder not found.")
+
+        if projectFolder is None:
+            if uio:
+                destFolder = uio.getInput(f"Enter the project folder to copy the {example_id} example into: ")
+            else:
+                destFolder = input(f"Enter the project folder to copy the {example_id} example into: ")
+
+            # Ensure the destination folder does not already exist.
+            if os.path.isdir(destFolder):
+                raise Exception(f"{destFolder} already exists.")
+
+        uio.info(f"Copying {example_folder} to {destFolder}")
+        shutil.copytree(example_folder, destFolder)
+
     def __init__(self, mcu, uio=None):
         """@brief Constructor."""
         super().__init__(uio)
@@ -1535,6 +1570,7 @@ class MCULoader(LoaderBase):
         fsStats[1] = freeSpace - sizeOfAllLoadedFiles
         self.rebootUnit(esp32HWReboot=True)
         return fsStats
+
 
 class UpgradeManager(LoaderBase):
     """@brief Responsible for upgrading the MCU App over a WiFi network."""
