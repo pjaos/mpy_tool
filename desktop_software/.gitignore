@@ -1,1 +1,6 @@
 TODO.md
+# The assets/examples folder (created by the build.sh script)
+# must not be ignored here or poetry will not include it in
+# the python wheel output file. Currently (due to the way poetry
+# uses git) We must live with the assets/examples folder being 
+# untracked byt git.

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mpy_tool"
-version = "0.34"
+version = "0.344"
 description = ""
 authors = ["Paul Austen <pjaos@gmail.com>"]
 readme = "README.md"
@@ -9,7 +9,7 @@ packages = [
     { include = "lib" , from = "src"}
 ]
 include = [
-    { path = "assets", format = ["sdist", "wheel"] },
+    { path = "assets/**", format = ["sdist", "wheel"] },
     { path = "pyproject.toml", format = ["sdist", "wheel"] },
 ]
 
@@ -21,7 +21,8 @@ paramiko = "*"
 retry = "*"
 p3lib = "^1.1.136"
 esptool = "^5.1.0"
-nicegui = "2.24.2"
+#nicegui = "2.21.1" # Old tested version
+nicegui = "2.24.2" # New version before changes that require significant rework of the mpy_tool code.
 #nicegui = "3.1.0" # This (latest nicegui version) is not currently supported.
 pyflakes = "*"
 rshell = "*"
