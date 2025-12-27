@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import shutil
 
 def ignore_ropeproject(directory, contents):
@@ -7,7 +8,9 @@ def ignore_ropeproject(directory, contents):
     # contents: list of names in that folder
     return {name for name in contents if name == ".ropeproject"}
 
-shutil.rmtree('assets/examples/')
+if os.path.isdir('assets/examples/'):
+    shutil.rmtree('assets/examples/')
+os.mkdir('assets/examples/')
 shutil.copytree(
     r"../mcu_template_software/examples/",
     r"assets/examples/",
