@@ -6,6 +6,8 @@ import threading
 import serial
 import requests
 import datetime
+import shutil
+
 from random import random
 from subprocess import check_output
 from pathlib import Path
@@ -20,6 +22,7 @@ from lib.bluetooth import YDevBlueTooth
 from p3lib.uio import UIO
 from p3lib.helper import logTraceBack
 from p3lib.pconfig import ConfigManager
+from   p3lib.helper import get_assets_folder
 
 from p3lib.ngt import TabbedNiceGui, YesNoDialog, FileAndFolderChooser, FileSaveChooser
 from nicegui import ui, app
@@ -87,6 +90,13 @@ class GUIServer(TabbedNiceGui):
     RAW_MESSAGE = "RAW"
     COMPLETE = "COMPLETE"
     SET_EDITOR_LINES = "SET_EDITOR_LINES"
+    EXAMPLE_LIST = ['1',
+                    '2',
+                    '3',
+                    '4',
+                    '5',
+                    '6',
+                    '7']
 
     @staticmethod
     def GetCmdOpts():
@@ -142,14 +152,16 @@ class GUIServer(TabbedNiceGui):
                            'OTA (Over The Air)',
                            'Serial Port',
                            'Scan',
-                           'Memory Monitor')
+                           'Memory Monitor',
+                           'Template Projects')
             # This must have the same number of elements as the above list
             tabMethodInitList = [self._initInstallTab,
                                  self._initWiFiTab,
                                  self._initUpgradeTab,
                                  self._initSerialTab,
                                  self._initScanTab,
-                                 self._initMemMonTab]
+                                 self._initMemMonTab,
+                                 self._initTemplateProject]
 
             self.initGUI(tabNameList,
                          tabMethodInitList,
@@ -210,7 +222,7 @@ class GUIServer(TabbedNiceGui):
         with ui.row():
             self._app_main_py_input = ui.input(label='MCU micropython main.py').style('width: 800px;')
             self._app_main_py_input.value = self._cfgMgr.getAttr(GUIServer.MCU_MAIN_PY)
-            self._select_main_py_button = ui.button('select mcu main.py', on_click=self._select_main_py)
+            self._select_main_py_button = ui.button('select mcu main.py', on_click=self._select_main_py).tooltip("Select the main.py file to be loaded to the MCU.")
             self._appendButtonList(self._select_main_py_button)
 
         self._installSWButton = ui.button('Install SW', on_click=self._installMicroPythonButtonHandler)
@@ -1308,6 +1320,149 @@ class GUIServer(TabbedNiceGui):
            @param lines A list of text lines to be set in the editor."""
         msgDict = {GUIServer.SET_EDITOR_LINES: lines}
         self.updateGUI(msgDict)
+
+
+    def _initTemplateProject(self):
+        markDownText = GUIServer.DESCRIP_STYLE_1+"""Template/Example MCU code that provide a starting point for implementing your chosen projects functionality. """
+        ui.markdown(markDownText)
+
+        with ui.row():
+            ui.markdown('Source Example Project')
+            self._example_select = ui.select(options=GUIServer.EXAMPLE_LIST, value=GUIServer.EXAMPLE_LIST[4]).tooltip('The installed MCU code examples are listed here.')
+            self._show_examples_button = ui.button('Example Project Descriptions', on_click=self._open_project_examples_page).tooltip('Show the descriptions of all the MCU template examples.')
+
+        with ui.row():
+            self._new_project_path_input = ui.input(label='New project path').style('width: 800px;')
+
+        with ui.row():
+            self._copy_example_button = ui.button('Copy Example Project', on_click=self._copy_example_project).tooltip('Copy MCU example code to a new folder to start your new project.')
+
+    def _open_project_examples_page(self):
+        """@brief open the top level mcu code examples page in a separate browser window."""
+        # This will open in a separate browser window
+        ui.run_javascript("window.open('/project_examples', '_blank')")
+
+    def copy_ignore(self, directory, contents):
+        # directory: the current folder being copied
+        # contents: list of names in that folder
+        return {name for name in contents if name in ["__pycache__"]}
+
+    def _copy_example_project(self):
+        """@brief Copy the selected example project to a new project folder so that the user can make changes for the required project functionality."""
+        try:
+            project_path = self._new_project_path_input.value
+            if not project_path:
+                raise Exception("The 'New project path' must be entered.")
+
+            p = Path(project_path)
+            parent = p.parent
+            if not os.path.isdir(parent):
+                raise Exception(f"{parent} folder not found.")
+
+            if os.path.isfile(project_path):
+                raise Exception(f"Failed to create a new folder as {project_path} is an existing file.")
+
+            if os.path.isdir(project_path):
+                raise Exception(f"Failed to create a new folder as {project_path} is an existing folder.")
+
+            selected_example = self._example_select.value
+            example_folder = GUIServer.GetExample()
+            selected_example_folder = os.path.join(example_folder, f'project_template_{selected_example}')
+            if not os.path.isdir(selected_example_folder):
+                raise Exception("{selected_example_folder} folder not found.")
+
+            main_py_file = os.path.join(selected_example_folder, 'main.py')
+            if not os.path.isfile(main_py_file):
+                raise Exception(f"{main_py_file} file not found.")
+
+            dest_folder = project_path
+            self.info(f"Copying {selected_example_folder} to {dest_folder}")
+            shutil.copytree(selected_example_folder, dest_folder, ignore=self.copy_ignore)
+
+            dest_main_py_file = os.path.join(dest_folder, 'main.py')
+            if not os.path.isfile(dest_main_py_file):
+                raise Exception(f"{dest_main_py_file} file not found.")
+
+            self._app_main_py_input.value = dest_main_py_file
+
+            self.info('All files copied successfully')
+
+        except Exception as ex:
+            self.error(str(ex))
+
+    @staticmethod
+    def GetExample(filename=None):
+        """@Get the example folder of file in the examples folder."""
+        assetsFolder = get_assets_folder()
+        if not assetsFolder:
+            raise Exception("assets folder not found.")
+
+        example = os.path.join(assetsFolder, 'examples')
+        if not os.path.isdir(example):
+            raise Exception(f"{example} folder not found.")
+
+        if filename:
+            example = os.path.join(example, filename)
+            if not os.path.isfile(example):
+                raise Exception(f"{example} file not found.")
+
+        return example
+
+    # Serve the mcu examples pages.
+    @ui.page('/project_examples')
+    def project_examples():
+        example = GUIServer.GetExample(filename = 'project_examples.md')
+        ui.page_title('MPY Tool Example doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_1_README.md')
+    def example_1_page():
+        example = GUIServer.GetExample(filename = 'project_template_1_README.md')
+        ui.page_title('MPY Tool Example 1 doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_2_README.md')
+    def example_2_page():
+        example = GUIServer.GetExample(filename = 'project_template_2_README.md')
+        ui.page_title('MPY Tool Example 2 doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_3_README.md')
+    def example_3_page():
+        example = GUIServer.GetExample(filename = 'project_template_3_README.md')
+        ui.page_title('MPY Tool Example 3 doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_4_README.md')
+    def example_4_page():
+        example = GUIServer.GetExample(filename = 'project_template_4_README.md')
+        ui.page_title('MPY Tool Example 4 doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_5_README.md')
+    def example_5_page():
+        example = GUIServer.GetExample(filename = 'project_template_5_README.md')
+        ui.page_title('MPY Tool Example 5 doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_6_README.md')
+    def example_6_page():
+        example = GUIServer.GetExample(filename = 'project_template_6_README.md')
+        ui.page_title('MPY Tool Example 6 doc')
+        ui.markdown(Path(example).read_text())
+
+    @ui.page('/project_template_7_README.md')
+    def example_7_page():
+        example = GUIServer.GetExample(filename = 'project_template_7_README.md')
+        ui.page_title('MPY Tool Example 7 doc')
+        ui.markdown(Path(example).read_text())
+
+    # This page is referenced inside examples 4 and 5
+    @ui.page('/WIFI_SETUP_GPIOS.md')
+    def wifi_setup_gpios_page():
+        example = GUIServer.GetExample(filename = 'project_template_1_README.md')
+        ui.markdown(Path(example).read_text())
+
 
 class MemoryUsage(TabbedNiceGui):
 

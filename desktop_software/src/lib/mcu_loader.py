@@ -289,7 +289,13 @@ class LoaderBase(MCUBase):
                 raise Exception(f"{destFolder} already exists.")
 
         uio.info(f"Copying {example_folder} to {destFolder}")
-        shutil.copytree(example_folder, destFolder)
+        shutil.copytree(example_folder, destFolder, ignore=LoaderBase.CopyIgnore)
+
+    @staticmethod
+    def CopyIgnore(directory, contents):
+        # directory: the current folder being copied
+        # contents: list of names in that folder
+        return {name for name in contents if name in ["__pycache__"]}
 
     def __init__(self, mcu, uio=None):
         """@brief Constructor."""
