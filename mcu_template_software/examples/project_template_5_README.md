@@ -1,7 +1,7 @@
 # Example Project 5
 
 This example includes the ability to setup WiFi over bluetooth. It also includes a webserver (microdot)
-that allows applications to be upgraded over the WiFi interface. It also supports device discovery over the 
+that allows applications to be upgraded over the WiFi interface. It also supports device discovery over the
 WiFi network.
 
 The message log from mpy_tool_gui (SERIAL PORT tab) when starting the app when it's connected to a WiFi network.
@@ -27,11 +27,11 @@ INFO:  /dev/ttyACM0: app_task(): count = 1
 INFO:  /dev/ttyACM0: app_task(): count = 2
 ```
 
-You can update the html file in the assets folder 
-to present the web page that you wish. Other files (css, javascript etc) 
+You can update the html file in the assets folder
+to present the web page that you wish. Other files (css, javascript etc)
 can be added to the assets folder if required. The _updateContent()
-method in the WebServer class (lib/webserver.py) updates the values on the 
-web page/s after they are read from flash memory and before they are served 
+method in the WebServer class (lib/webserver.py) updates the values on the
+web page/s after they are read from flash memory and before they are served
 to the clients web browser.
 
 '''
@@ -59,7 +59,7 @@ If you wish to add code for your project you should update the ThisMachine class
 class ThisMachine(BaseMachine):
 ...
     async def app_task(self):
-        """@brief Add your project code here. 
+        """@brief Add your project code here.
                   Make sure await asyncio.sleep(1) is called frequently to ensure other tasks get CPU time."""
         count = 0
         while True:
@@ -69,7 +69,7 @@ class ThisMachine(BaseMachine):
 ```
 
 You may want to modify the above code for your projects functionality to read some values from sensors. These values can be used to update values in a dictionary.
-The setParamDict() method on the WebServer class (lib/webserver.py) should be used to pass a reference to this dictionary which is 
+The setParamDict() method on the WebServer class (lib/webserver.py) should be used to pass a reference to this dictionary which is
 then used by the WebServer class to update the values on the webpage served to the client.
 
 ## Scan tool
@@ -105,4 +105,4 @@ These parameters can be set in your code for your product type.
 
 The example code includes the allocation of two GPIO pins on the MCU, one connected to an LED and one connected to a button.
 
-See [WIFI_SETUP_GPIOS.md](../project_template_4/WIFI_SETUP_GPIOS.md) for details of this.
+See [WIFI_SETUP_GPIOS.md](WIFI_SETUP_GPIOS.md) for details of this.
