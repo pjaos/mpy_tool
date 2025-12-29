@@ -417,6 +417,7 @@ class LoaderBase(MCUBase):
         mpDescripLine = None
         self.debug("_checkMicroPython(): START")
         timeoutS = time()+timeoutSeconds
+        manResetTime = time()+(timeoutSeconds/3)
         replPromptFound = False
         try:
             try:
@@ -471,6 +472,11 @@ class LoaderBase(MCUBase):
 
                     # Delay so we don't spinlock and to allow serial data to arrive
                     sleep(0.25)
+
+                    # If the control signals to reset the esp32 are not connected
+                    # then prompt the user to reset the esp32 manually.
+                    if USBLoader.IsEsp32(self._mcu) and time() > manResetTime:
+                        self.info("!!! PERFORM MANUAL ESP32 RESET NOW !!!")
 
                     if time() > timeoutS:
                         raise Exception(f"{timeoutSeconds} second timeout waiting for MCU MicroPython prompt.")
@@ -1156,7 +1162,7 @@ class USBLoader(LoaderBase):
             'esptool',
             '-p',
             f'{sp}',
-            'chip_id'
+            'chip-id'
         ]
         response = self._run_esptool_capture(args)
         lines = response.split("\n")
