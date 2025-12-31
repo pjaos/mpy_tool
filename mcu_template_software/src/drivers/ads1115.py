@@ -105,10 +105,10 @@ class ADS1115ADC():
            @param single_ended If True then single ended mode.
                               If False then differential mod is
                               selected (A0 and A1 pins)."""
-        self._mux = self._getMux(0, single_ended=single_ended)
-        self._pga = self._getPGAValue(self._adc0FSVoltage)
-        self._dr = self._getDataRate(self._adc0SamplesPerSecond)
-        return self._getADCValue()
+        self._mux = self._get_mux(0, single_ended=single_ended)
+        self._pga = self._get_pga_value(self._adc0FSVoltage)
+        self._dr = self._get_data_rate(self._adc0SamplesPerSecond)
+        return self._get_adc_value()
 
     def get_adc1(self, single_ended=True):
         """@brief Get the value from ADC1.
@@ -116,10 +116,10 @@ class ADS1115ADC():
            @param single_ended If True then single ended mode.
                               If False then differential mod is
                               selected (A0 and A3 pins)."""
-        self._mux = self._getMux(1, single_ended=single_ended)
-        self._pga = self._getPGAValue(self._adc1FSVoltage)
-        self._dr = self._getDataRate(self._adc1SamplesPerSecond)
-        return self._getADCValue()
+        self._mux = self._get_mux(1, single_ended=single_ended)
+        self._pga = self._get_pga_value(self._adc1FSVoltage)
+        self._dr = self._get_data_rate(self._adc1SamplesPerSecond)
+        return self._get_adc_value()
 
     def get_adc2(self, single_ended=True):
         """@brief Get the value from ADC2.
@@ -127,10 +127,10 @@ class ADS1115ADC():
            @param single_ended If True then single ended mode.
                               If False then differential mod is
                               selected (A1 and A3 pins)."""
-        self._mux = self._getMux(2, single_ended=single_ended)
-        self._pga = self._getPGAValue(self._adc2FSVoltage)
-        self._dr = self._getDataRate(self._adc2SamplesPerSecond)
-        return self._getADCValue()
+        self._mux = self._get_mux(2, single_ended=single_ended)
+        self._pga = self._get_pga_value(self._adc2FSVoltage)
+        self._dr = self._get_data_rate(self._adc2SamplesPerSecond)
+        return self._get_adc_value()
 
     def get_adc3(self, single_ended=True):
         """@brief Get the value from ADC3.
@@ -138,10 +138,10 @@ class ADS1115ADC():
            @param single_ended If True then single ended mode.
                               If False then differential mod is
                               selected (A2 and A3 pins)."""
-        self._mux = self._getMux(3, single_ended=single_ended)
-        self._pga = self._getPGAValue(self._adc3FSVoltage)
-        self._dr = self._getDataRate(self._adc3SamplesPerSecond)
-        return self._getADCValue()
+        self._mux = self._get_mux(3, single_ended=single_ended)
+        self._pga = self._get_pga_value(self._adc3FSVoltage)
+        self._dr = self._get_data_rate(self._adc3SamplesPerSecond)
+        return self._get_adc_value()
 
     def get_signed_value(self, adc, single_ended=True, bit_count=16):
         """@brief Get a signed value from an ADC.
@@ -150,13 +150,13 @@ class ADS1115ADC():
            @param bit_count The number of bits read (16 or 12 for ADS1115)."""
         mask = 1 << (bit_count - 1)
         if adc == 0:
-            adc_value = self.getADC0(single_ended=single_ended)
+            adc_value = self.get_adc0(single_ended=single_ended)
         elif adc == 1:
-            adc_value = self.getADC1(single_ended=single_ended)
+            adc_value = self.get_adc1(single_ended=single_ended)
         elif adc == 2:
-            adc_value = self.getADC2(single_ended=single_ended)
+            adc_value = self.get_adc2(single_ended=single_ended)
         elif adc == 3:
-            adc_value = self.getADC3(single_ended=single_ended)
+            adc_value = self.get_adc3(single_ended=single_ended)
         else:
             raise Exception("{} is an invalid ADC.".format(adc))
 
@@ -266,7 +266,7 @@ class ADS1115ADC():
     def _wait_for_conversion_completion(self, sleep_micro_seconds=100):
         """@brief wait for a conversion to complete."""
         while True:
-            cfg_reg_state = self._read16BitValue(ADS1115ADC.CONFIG_REG)
+            cfg_reg_state = self._read16_bit_value(ADS1115ADC.CONFIG_REG)
             if cfg_reg_state & (1 << ADS1115ADC.OS_CFG_REG_BIT):
                 break
             # We used to spin lock here and this generated occasional
@@ -296,15 +296,15 @@ class ADS1115ADC():
         byte_list.append(regValue16Bit & 0xff)
 
         # Called in case a conversion is in progress
-        self._waitForConversionCompletion()
+        self._wait_for_conversion_completion()
 
         # Initiate a conversion
-        self._write16BitValue(ADS1115ADC.CONFIG_REG, regValue16Bit)
+        self._write16_bit_value(ADS1115ADC.CONFIG_REG, regValue16Bit)
 
         # Wait for the conversion to complete
-        self._waitForConversionCompletion()
+        self._wait_for_conversion_completion()
 
         # read the ADC value
-        cnv_value = self._read16BitValue(ADS1115ADC.CONVERSION_REG)
+        cnv_value = self._read16_bit_value(ADS1115ADC.CONVERSION_REG)
 
         return cnv_value
