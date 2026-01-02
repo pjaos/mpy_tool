@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mpy_tool"
-version = "0.41"
+version = "0.42"
 description = ""
 authors = ["Paul Austen <pjaos@gmail.com>"]
 readme = "README.md"
@@ -19,11 +19,9 @@ python = ">=3.12,<3.14"
 # Cross-platform packages
 paramiko = "*"
 retry = "*"
-p3lib = "^1.1.136"
+p3lib = "^1.1.138"
 esptool = "^5.1.0"
-#nicegui = "2.21.1" # Old tested version
-nicegui = "2.24.2" # New version before changes that require significant rework of the mpy_tool code.
-#nicegui = "3.1.0" # This (latest nicegui version) is not currently supported.
+nicegui = "3.4.1"
 pyflakes = "*"
 rshell = "*"
 mpy_cross = "*"

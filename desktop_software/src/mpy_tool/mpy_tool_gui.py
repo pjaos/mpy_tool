@@ -24,7 +24,7 @@ from p3lib.helper import logTraceBack
 from p3lib.pconfig import ConfigManager
 from   p3lib.helper import get_assets_folder
 
-from p3lib.ngt import TabbedNiceGui, YesNoDialog, FileAndFolderChooser, FileSaveChooser
+from p3lib.ngt3 import TabbedNiceGui, YesNoDialog, FileAndFolderChooser, FileSaveChooser
 from nicegui import ui, app
 import plotly.graph_objects as go
 
@@ -146,32 +146,46 @@ class GUIServer(TabbedNiceGui):
         """@brief Start the App server running."""
         self._uio.info("Starting GUI...")
         TabbedNiceGui.CheckPort(self._options.port)
-        try:
-            tabNameList = ('Install',
-                           'WiFi',
-                           'OTA (Over The Air)',
-                           'Serial Port',
-                           'Scan',
-                           'Memory Monitor',
-                           'Template Projects')
-            # This must have the same number of elements as the above list
-            tabMethodInitList = [self._initInstallTab,
-                                 self._initWiFiTab,
-                                 self._initUpgradeTab,
-                                 self._initSerialTab,
-                                 self._initScanTab,
-                                 self._initMemMonTab,
-                                 self._initTemplateProject]
 
-            self.initGUI(tabNameList,
-                         tabMethodInitList,
-                         address=self._options.address,
-                         port=self._options.port,
-                         pageTitle=GUIServer.PAGE_TITLE,
-                         reload=False)
+        tabNameList = ('Install',
+                       'WiFi',
+                       'OTA (Over The Air)',
+                       'Serial Port',
+                       'Scan',
+                       'Memory Monitor',
+                       'Template Projects')
 
-        finally:
-            self.close()
+        # This must have the same number of elements as the above list
+        tabMethodInitList = [self._initInstallTab,
+                             self._initWiFiTab,
+                             self._initUpgradeTab,
+                             self._initSerialTab,
+                             self._initScanTab,
+                             self._initMemMonTab,
+                             self._initTemplateProject]
+
+        self.set_init_gui_args(tabNameList,
+                                tabMethodInitList,
+                                address=self._options.address,
+                                port=self._options.port,
+                                pageTitle=GUIServer.PAGE_TITLE,
+                                reload=False)
+
+        ui.sub_pages({
+            '/': self.init_gui,  # Root page, followed by sub pages
+            '/memory_usage': self._init_mem_usage_gui,
+            '/project_examples': self.project_examples,
+            '/project_template_1_README.md': self.example_1_page,
+            '/project_template_2_README.md': self.example_1_page,
+            '/project_template_3_README.md': self.example_1_page,
+            '/project_template_4_README.md': self.example_1_page,
+            '/project_template_5_README.md': self.example_1_page,
+            '/project_template_6_README.md': self.example_1_page,
+            '/project_template_7_README.md': self.example_1_page,
+            '/WIFI_SETUP_GPIOS.md': self.wifi_setup_gpios_page,
+            })
+
+
 
     def _initInstallTab(self):
         """@brief Create the install micropython tab contents."""
@@ -1274,6 +1288,13 @@ class GUIServer(TabbedNiceGui):
         """@brief Update the memory monitor poll time."""
         self._saveConfig()
 
+    def _init_mem_usage_gui(self):
+        self._mu = MemoryUsage(self._options,
+                            self._deviceIPAddressInput2.value,
+                            self._runGCInput.value,
+                            self._memMonSecondsInput.value,
+                            self._uio.isDebugEnabled())
+
     def _startMemMon(self):
         """@brief Start monitoring MCU device memory usage."""
         # Set min value if not set
@@ -1281,16 +1302,7 @@ class GUIServer(TabbedNiceGui):
             self._memMonSecondsInput.value = 1
 
         self.info("Started memory monitor.")
-
-        # Open another browser window to show the memory usage.
-        @ui.page('/memory_usage')
-        def memory_usage():
-            mu = MemoryUsage(self._options,
-                             self._deviceIPAddressInput2.value,
-                             self._runGCInput.value,
-                             self._memMonSecondsInput.value,
-                             self._uio.isDebugEnabled())
-            mu.start()
+        self._mu.start()
         # This will open the new page in a new browser window
         ui.run_javascript("window.open('/memory_usage', '_blank')")
 
@@ -1409,57 +1421,48 @@ class GUIServer(TabbedNiceGui):
         return example
 
     # Serve the mcu examples pages.
-    @ui.page('/project_examples')
-    def project_examples():
+    def project_examples(self):
         example = GUIServer.GetExample(filename = 'project_examples.md')
         ui.page_title('MPY Tool Example doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_1_README.md')
-    def example_1_page():
+    def example_1_page(self):
         example = GUIServer.GetExample(filename = 'project_template_1_README.md')
         ui.page_title('MPY Tool Example 1 doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_2_README.md')
-    def example_2_page():
+    def example_2_page(self):
         example = GUIServer.GetExample(filename = 'project_template_2_README.md')
         ui.page_title('MPY Tool Example 2 doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_3_README.md')
-    def example_3_page():
+    def example_3_page(self):
         example = GUIServer.GetExample(filename = 'project_template_3_README.md')
         ui.page_title('MPY Tool Example 3 doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_4_README.md')
-    def example_4_page():
+    def example_4_page(self):
         example = GUIServer.GetExample(filename = 'project_template_4_README.md')
         ui.page_title('MPY Tool Example 4 doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_5_README.md')
-    def example_5_page():
+    def example_5_page(self):
         example = GUIServer.GetExample(filename = 'project_template_5_README.md')
         ui.page_title('MPY Tool Example 5 doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_6_README.md')
-    def example_6_page():
+    def example_6_page(self):
         example = GUIServer.GetExample(filename = 'project_template_6_README.md')
         ui.page_title('MPY Tool Example 6 doc')
         ui.markdown(Path(example).read_text())
 
-    @ui.page('/project_template_7_README.md')
-    def example_7_page():
+    def example_7_page(self):
         example = GUIServer.GetExample(filename = 'project_template_7_README.md')
         ui.page_title('MPY Tool Example 7 doc')
         ui.markdown(Path(example).read_text())
 
     # This page is referenced inside examples 4 and 5
-    @ui.page('/WIFI_SETUP_GPIOS.md')
-    def wifi_setup_gpios_page():
+    def wifi_setup_gpios_page(self):
         example = GUIServer.GetExample(filename = 'project_template_1_README.md')
         ui.markdown(Path(example).read_text())
 
@@ -1483,9 +1486,8 @@ class MemoryUsage(TabbedNiceGui):
         self._address = address
         self._runGC = runGC
         self._pollTime = pollTime
-        self._init_gui()
 
-    def _init_gui(self):
+    def init_gui(self):
         self._time_data = []
         self._ram_used_data = []
         self._ram_free_data = []

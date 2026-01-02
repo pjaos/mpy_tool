@@ -3,10 +3,10 @@
 import os
 import shutil
 
-def ignore_ropeproject(directory, contents):
+def ignore_file(directory, contents):
     # directory: the current folder being copied
     # contents: list of names in that folder
-    return {name for name in contents if name == ".ropeproject"}
+    return {name for name in contents if name in [".ropeproject"]}
 
 if os.path.isdir('assets/examples/'):
     shutil.rmtree('assets/examples/')
@@ -15,6 +15,6 @@ shutil.copytree(
     r"../mcu_template_software/examples/",
     r"assets/examples/",
     dirs_exist_ok=True,
-    ignore=ignore_ropeproject,
+    ignore=ignore_file,
     symlinks=False       # follow symlinks; copy actual files
 )
