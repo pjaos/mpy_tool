@@ -266,7 +266,7 @@ class LoaderBase(MCUBase):
         # Check the user is running the cmd from the correct location in the git repo
         assets_folder = get_assets_folder()
         if not assets_folder:
-            raise Exception(f"assets folder not found.")
+            raise Exception("assets folder not found.")
 
         examples_folder = os.path.join(assets_folder, 'examples')
         if not examples_folder or not os.path.isdir(examples_folder):
