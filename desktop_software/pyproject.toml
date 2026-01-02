@@ -19,7 +19,7 @@ python = ">=3.12,<3.14"
 # Cross-platform packages
 paramiko = "*"
 retry = "*"
-p3lib = "^1.1.138"
+p3lib = "^1.1.139"
 esptool = "^5.1.0"
 nicegui = "3.4.1"
 pyflakes = "*"

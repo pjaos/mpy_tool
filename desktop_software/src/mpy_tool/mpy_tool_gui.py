@@ -185,8 +185,6 @@ class GUIServer(TabbedNiceGui):
             '/WIFI_SETUP_GPIOS.md': self.wifi_setup_gpios_page,
             })
 
-
-
     def _initInstallTab(self):
         """@brief Create the install micropython tab contents."""
         markDownText = GUIServer.DESCRIP_STYLE_1+"""Install software on an MCU via a USB connection."""
@@ -2129,7 +2127,7 @@ def main():
             uio.error(str(ex))
 
 
-if __name__ == '__main__':
+if __name__ in {"__main__", "__mp_main__"}:
     main()
 
 
