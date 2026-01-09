@@ -2,8 +2,8 @@
 
 import argparse
 
-from   lib.general import MCUBase
-from   lib.mcu_loader import USBLoader, UpgradeManager, LoaderBase
+from   mpy_tool._lib.general import MCUBase
+from   mpy_tool._lib.mcu_loader import USBLoader, UpgradeManager, LoaderBase
 
 from   p3lib.uio import UIO
 from   p3lib.helper import logTraceBack

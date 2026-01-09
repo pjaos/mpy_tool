@@ -5,3 +5,4 @@ python copy_examples.py # Copy the examples folder to the assets folder so
 # Use poetry command to build python wheel
 poetry -vvv build
 move dist windows
+

@@ -1,0 +1,2 @@
+- This micropython has the st7789 module compiled in.
+- Examples folders should only contain files to be loaded to MCU. No README.md or notes.txt files.

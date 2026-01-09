@@ -8,7 +8,7 @@ python3 copy_examples.py # Copy the examples folder to the assets folder so
 poetry -vvv build
 rm linux/*.tar.gz 2>&1 > /dev/null
 rm linux/*.whl 2>&1 > /dev/null
-set -e
+#set -e
 cp dist/*.tar.gz linux
 cp dist/*.whl linux
 rm -rf dist

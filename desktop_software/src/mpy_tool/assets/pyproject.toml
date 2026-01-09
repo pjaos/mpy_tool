@@ -1,0 +1,56 @@
+[tool.poetry]
+name = "mpy_tool"
+version = "0.45"
+description = ""
+authors = ["Paul Austen <pjaos@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "mpy_tool" , from = "src"},
+    { include = "lib" , from = "src"},
+]
+#include = [
+#    { path = "assets/**", format = ["sdist", "wheel"] },
+#    { path = "pyproject.toml", format = ["sdist", "wheel"] },
+#]
+
+[tool.hatch.build.targets.wheel]
+include = [
+  "mpy_tool/assets/**"
+]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.14"
+
+# Cross-platform packages
+paramiko = "*"
+retry = "*"
+p3lib = "^1.1.140"
+esptool = "^5.1.0"
+nicegui = "3.4.1"
+pyflakes = "*"
+rshell = "*"
+mpy_cross = "*"
+ping3 = "*"
+bleak = "^0.22.3"
+plotly = "*"
+pillow = "*"
+requests = "*"
+mpremote = "*"
+
+# Windows-only dependencies
+pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
+pyreadline3 = { version = "*", markers = "sys_platform == 'win32'" }
+
+[tool.poetry.scripts]
+mpy_tool = "mpy_tool.mpy_tool:main"
+mpy_tool_gui = "mpy_tool.mpy_tool_gui:main"
+# We need to call rshell externally because if it is called from python
+# on windows platforms, rshell hangs onto it's serial port stopping
+# subsequent serial port access. Calling rshell as an external
+# command works around this rshell issue.
+mpy_tool_rshell = "rshell.main:main"
+mpy_tool_mpremote = "mpremote.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

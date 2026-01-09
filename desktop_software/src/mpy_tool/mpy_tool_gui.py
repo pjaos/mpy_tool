@@ -16,13 +16,13 @@ from time import time, sleep
 from queue import Queue, Empty
 from p3lib.launcher import Launcher
 
-from lib.mcu_loader import LoaderBase, USBLoader, UpgradeManager, YDevScanner, MCUBase
-from lib.bluetooth import YDevBlueTooth
+from mpy_tool._lib.mcu_loader import LoaderBase, USBLoader, UpgradeManager, YDevScanner, MCUBase
+from mpy_tool._lib.bluetooth import YDevBlueTooth
 
 from p3lib.uio import UIO
 from p3lib.helper import logTraceBack
 from p3lib.pconfig import ConfigManager
-from   p3lib.helper import get_assets_folder
+from p3lib.helper import get_assets_dir
 
 from p3lib.ngt3 import TabbedNiceGui, YesNoDialog, FileAndFolderChooser, FileSaveChooser
 from nicegui import ui, app
@@ -1403,7 +1403,7 @@ class GUIServer(TabbedNiceGui):
     @staticmethod
     def GetExample(filename=None):
         """@Get the example folder of file in the examples folder."""
-        assetsFolder = get_assets_folder()
+        assetsFolder = get_assets_dir('mpy_tool')
         if not assetsFolder:
             raise Exception("assets folder not found.")
 
