@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-platform installer/uninstaller for mpy_tool wheels.
+Cross-platform installer/uninstaller for python wheels.
 Features:
 - Auto-detect version from wheel filename (optional --version)
 - User vs system mode
@@ -20,17 +20,21 @@ import subprocess
 import sys
 from pathlib import Path
 
+# -------- change this section between apps, start ----------
+
 APP_NAME = "mpy_tool"
-# List of commands to be installed as defined in the pyproject.toml file
-# If the second argument is defined then 'venv python -m <second arg>'
-# is used to start the script.
-# If not defined then these commands are launched using the pip/poetry
-# startup script created when the python wheel was installed.
-# If a command (dict key) includes the 'gui' text then on Linux a .desktop file is created to launch the file.
+# List of commands to be installed as defined in the pyproject.toml file '[tool.poetry.scripts]' section
+# If the second argument is defined then 'venv python -m <second arg>' is used to start the script.
+# If not defined then these commands are launched using the pip/poetry startup script created when
+# the python wheel is installed.
+# If a command (dict key) includes the 'gui' text then on a Linux platform a .desktop file is
+# created to launch the file during installation.
 CMD_DICT = {"mpy_tool": "",
             "mpy_tool_gui": "mpy_tool.mpy_tool_gui",
             "mpy_tool_rshell": "",
             "mpy_tool_mpremote": ""}
+
+# -------- change this section between apps, end ----------
 
 def die(msg):
     print(f"ERROR: {msg}", file=sys.stderr)
@@ -200,7 +204,7 @@ def ask_reboot():
             None, "runas", "shutdown", "/r /t 5", None, 1
         )
 
-        
+
 def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
     """
     Create CLI launchers and Linux .desktop files.
@@ -226,7 +230,7 @@ def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
             launcher = bin_dir / f"{cmd}.bat"
             if module_target:
                 launcher.write_text(
-                    f"""@echo off 
+                    f"""@echo off
 set VENV_DIR={venv_dir}
 call "%VENV_DIR%\\Scripts\\activate.bat"
 python -m {module_target} %*
@@ -234,7 +238,7 @@ python -m {module_target} %*
 
             else:
                 launcher.write_text(
-                    f"""@echo off 
+                    f"""@echo off
 set VENV_DIR={venv_dir}
 call "%VENV_DIR%\\Scripts\\activate.bat"
 python -m {APP_NAME}.{cmd} %*
