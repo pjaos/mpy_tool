@@ -293,11 +293,12 @@ exec "{entrypoint}" "$@"
         icon_path = venv_path / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" \
                     / "site-packages" / APP_NAME / "assets" / "icon.png"
 
-        for cmd, module_target in CMD_DICT.items():
-            # Only GUI apps need desktop files
-            if "gui" in cmd.lower():
-                desktop_file = desktop_dir / f"{cmd}.desktop"
-                desktop_file.write_text(f"""[Desktop Entry]
+        if system == "Linux":
+            for cmd, module_target in CMD_DICT.items():
+                # Only GUI apps need desktop files
+                if "gui" in cmd.lower():
+                    desktop_file = desktop_dir / f"{cmd}.desktop"
+                    desktop_file.write_text(f"""[Desktop Entry]
 Version=1.0
 Type=Application
 Name={cmd}
@@ -306,7 +307,7 @@ Icon={icon_path}
 Exec={bin_dir / cmd}
 Terminal=false
 """)
-                print(f"Created {desktop_file}")
+                    print(f"Created {desktop_file}")
 
 def status(args):
     base = Path(args.base).resolve()
