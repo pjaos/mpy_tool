@@ -136,6 +136,71 @@ def uninstall(args):
         die("Specify --all or --version to uninstall")
 
 
+ENV_KEY = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+
+def get_machine_path():
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, ENV_KEY) as k:
+        return winreg.QueryValueEx(k, "Path")[0]
+
+
+def get_user_path():
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+            return winreg.QueryValueEx(k, "Path")[0]
+    except FileNotFoundError:
+        return ""
+
+
+def set_user_path(value):
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as k:
+        winreg.SetValueEx(k, "Path", 0, winreg.REG_EXPAND_SZ, value)
+
+
+def add_to_user_path(dir_to_add):
+    # Ensure string
+    dir_to_add = str(dir_to_add)
+
+    current = get_user_path()
+
+    parts = [p for p in current.split(";") if p]
+
+    norm = [p.lower().rstrip("\\") for p in parts]
+    target = dir_to_add.lower().rstrip("\\")
+
+    if target in norm:
+        return False   # already present
+
+    new = current + (";" if current and not current.endswith(";") else "") + dir_to_add
+    set_user_path(new)
+    return True
+
+
+def ask_reboot():
+    import ctypes
+
+    MB_ICONQUESTION = 0x20
+    MB_YESNO = 0x04
+    MB_DEFBUTTON2 = 0x100
+    MB_SYSTEMMODAL = 0x1000
+
+    result = ctypes.windll.user32.MessageBoxW(
+        None,
+        "MPY Tool has been added to your PATH.\n\n"
+        "Windows needs to restart Explorer (or reboot) for this to take effect.\n\n"
+        "Restart the computer now?",
+        "MPY Tool installation",
+        MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2 | MB_SYSTEMMODAL
+    )
+
+    if result == 6:  # YES
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", "shutdown", "/r /t 5", None, 1
+        )
+
+        
 def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
     """
     Create CLI launchers and Linux .desktop files.
@@ -155,15 +220,32 @@ def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
         )
         bin_dir.mkdir(parents=True, exist_ok=True)
 
-        for cmd, module_target in CMD_DICT.items():
-            entrypoint = venv_path / "Scripts" / f"{cmd}.exe"
-            if not entrypoint.exists():
-                die(f"Entrypoint {cmd} not found in venv at {entrypoint}")
+        venv_dir = str(venv_path)
 
+        for cmd, module_target in CMD_DICT.items():
             launcher = bin_dir / f"{cmd}.bat"
-            launcher.write_text(f"""@echo off
-"{entrypoint}" %*
+            if module_target:
+                launcher.write_text(
+                    f"""@echo off 
+set VENV_DIR={venv_dir}
+call "%VENV_DIR%\\Scripts\\activate.bat"
+python -m {module_target} %*
 """)
+
+            else:
+                launcher.write_text(
+                    f"""@echo off 
+set VENV_DIR={venv_dir}
+call "%VENV_DIR%\\Scripts\\activate.bat"
+python -m {APP_NAME}.{cmd} %*
+""")
+            print(f"Created {launcher}")
+
+        # Ensure the bin folder is on the system PATH
+        path_changed = add_to_user_path(bin_dir)
+
+        if path_changed:
+            ask_reboot()
 
     else:
         # Linux / macOS
@@ -200,6 +282,8 @@ exec "{entrypoint}" "$@"
                 if launcher.exists() or launcher.is_symlink():
                     launcher.unlink()
                 launcher.symlink_to(wrapper_script)
+
+            print(f"Created {launcher}")
 
         # Optional: create .desktop files for GUI commands
         desktop_dir = Path.home() / ".local" / "share" / "applications"
