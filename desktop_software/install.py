@@ -21,8 +21,16 @@ import sys
 from pathlib import Path
 
 APP_NAME = "mpy_tool"
-COMMANDS = ["mpy_tool", "mpy_tool_gui"]  # commands to create launchers
-
+# List of commands to be installed as defined in the pyproject.toml file
+# If the second argument is defined then 'venv python -m <second arg>'
+# is used to start the script.
+# If not defined then these commands are launched using the pip/poetry
+# startup script created when the python wheel was installed.
+# If a command (dict key) includes the 'gui' text then on Linux a .desktop file is created to launch the file.
+CMD_DICT = {"mpy_tool": "",
+            "mpy_tool_gui": "mpy_tool.mpy_tool_gui",
+            "mpy_tool_rshell": "",
+            "mpy_tool_mpremote": ""}
 
 def die(msg):
     print(f"ERROR: {msg}", file=sys.stderr)
@@ -78,72 +86,143 @@ def install_wheel(venv_path: Path, wheel: Path):
     subprocess.check_call([str(python_exe), "-m", "pip", "install", "--upgrade", str(wheel)])
 
 
-def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
-    """
-    Create CLI launchers and Linux .desktop files.
-    """
-    if platform.system() == "Windows":
-        bin_dir = Path.home() / "AppData" / "Local" / "Programs" / APP_NAME / "bin" \
-            if mode == "user" else Path("C:/Program Files") / APP_NAME / "bin"
-        bin_dir.mkdir(parents=True, exist_ok=True)
-        for cmd in COMMANDS:
-            launcher = bin_dir / f"{cmd}.bat"
-            launcher.write_text(f"""@echo off
-"{venv_path / 'Scripts' / 'python.exe'}" -m {APP_NAME}.{cmd} %*
-""")
-    else:
-        bin_dir = Path.home() / ".local" / "bin" if mode == "user" else Path("/usr/local/bin")
-        bin_dir.mkdir(parents=True, exist_ok=True)
-        wrapper_dir = base / version / "launchers"
-        wrapper_dir.mkdir(parents=True, exist_ok=True)
-        for cmd in COMMANDS:
-            wrapper_script = wrapper_dir / f"{cmd}.sh"
-            wrapper_script.write_text(f"""#!/bin/bash
-VENV_PYTHON="{venv_path / 'bin' / 'python'}"
-exec "$VENV_PYTHON" -m {APP_NAME}.{cmd} "$@"
-""")
-            wrapper_script.chmod(0o755)
-            # Symlink in bin_dir
-            launcher = bin_dir / cmd
-            if launcher.exists():
-                launcher.unlink()
-            launcher.symlink_to(wrapper_script)
-
-        # Create .desktop files for GUI commands
-        desktop_dir = Path.home() / ".local" / "share" / "applications"
-        desktop_dir.mkdir(parents=True, exist_ok=True)
-        icon_path = venv_path / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" \
-            / "site-packages" / APP_NAME / "assets" / "icon.png"
-        for cmd in COMMANDS:
-            desktop_file = desktop_dir / f"{cmd}.desktop"
-            desktop_file.write_text(f"""[Desktop Entry]
-Version=1.0
-Type=Application
-Name=MPY_Tool
-Comment=
-Icon={icon_path}
-Exec={bin_dir / cmd}
-Terminal=false
-""")
-    print(f"Launchers created in {bin_dir}")
-
-
 def uninstall(args):
     base = Path(args.base).resolve()
+
     if args.all:
         shutil.rmtree(base, ignore_errors=True)
         print("All versions removed")
+
+        # Remove symlinks in bin_dir
+        bin_dir = Path.home() / ".local" / "bin" if args.mode == "user" else Path("/usr/local/bin")
+        for cmd in CMD_DICT:
+            path = bin_dir / cmd
+            if path.is_symlink() or path.exists():
+                path.unlink(missing_ok=True)
+
+        # Remove .desktop files
+        desktop_dir = Path.home() / ".local" / "share" / "applications"
+        for cmd in CMD_DICT:
+            desktop_file = desktop_dir / f"{cmd}.desktop"
+            if desktop_file.exists():
+                desktop_file.unlink()
+
         return
+
     if args.version:
-        p = base / args.version
-        if p.exists():
-            shutil.rmtree(p)
+        version_path = base / args.version
+        if version_path.exists():
+            shutil.rmtree(version_path)
             print(f"Removed version {args.version}")
+
+            # Remove symlinks in bin_dir
+            bin_dir = Path.home() / ".local" / "bin" if args.mode == "user" else Path("/usr/local/bin")
+            for cmd in CMD_DICT:
+                path = bin_dir / cmd
+                # Only unlink if it points to this version’s wrapper
+                if path.is_symlink() and version_path in str(path.resolve()):
+                    path.unlink()
+
+            # Remove .desktop files for this version
+            desktop_dir = Path.home() / ".local" / "share" / "applications"
+            for cmd in CMD_DICT:
+                desktop_file = desktop_dir / f"{cmd}.desktop"
+                if desktop_file.exists():
+                    desktop_file.unlink()
+
         else:
             print(f"Version {args.version} not found")
     else:
         die("Specify --all or --version to uninstall")
 
+
+def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
+    """
+    Create CLI launchers and Linux .desktop files.
+
+    On Windows: creates .bat files that call the venv-installed console scripts.
+    On Linux/macOS: creates wrapper scripts that either call python -m <module>
+                    or the venv-installed console scripts, with symlinks in bin_dir.
+    """
+
+    system = platform.system()
+
+    if system == "Windows":
+        bin_dir = (
+            Path.home() / "AppData" / "Local" / "Programs" / APP_NAME / "bin"
+            if mode == "user"
+            else Path("C:/Program Files") / APP_NAME / "bin"
+        )
+        bin_dir.mkdir(parents=True, exist_ok=True)
+
+        for cmd, module_target in CMD_DICT.items():
+            entrypoint = venv_path / "Scripts" / f"{cmd}.exe"
+            if not entrypoint.exists():
+                die(f"Entrypoint {cmd} not found in venv at {entrypoint}")
+
+            launcher = bin_dir / f"{cmd}.bat"
+            launcher.write_text(f"""@echo off
+"{entrypoint}" %*
+""")
+
+    else:
+        # Linux / macOS
+        bin_dir = Path.home() / ".local" / "bin" if mode == "user" else Path("/usr/local/bin")
+        bin_dir.mkdir(parents=True, exist_ok=True)
+
+        wrapper_dir = base / version / "launchers"
+        wrapper_dir.mkdir(parents=True, exist_ok=True)
+
+        python_exe = venv_path / "bin" / "python"
+
+        for cmd, module_target in CMD_DICT.items():
+            if module_target:
+                # Command needs python -m module
+                launcher = bin_dir / cmd
+                contents = f"""#!/bin/sh
+exec "{python_exe}" -m {module_target} "$@"
+"""
+                launcher.write_text(contents)
+                launcher.chmod(0o755)
+            else:
+                # Use the venv-installed console script
+                entrypoint = venv_path / "bin" / cmd
+                if not entrypoint.exists():
+                    die(f"Entrypoint {cmd} not found in venv at {entrypoint}")
+
+                wrapper_script = wrapper_dir / f"{cmd}.sh"
+                wrapper_script.write_text(f"""#!/bin/sh
+exec "{entrypoint}" "$@"
+""")
+                wrapper_script.chmod(0o755)
+
+                launcher = bin_dir / cmd
+                if launcher.exists() or launcher.is_symlink():
+                    launcher.unlink()
+                launcher.symlink_to(wrapper_script)
+
+        # Optional: create .desktop files for GUI commands
+        desktop_dir = Path.home() / ".local" / "share" / "applications"
+        desktop_dir.mkdir(parents=True, exist_ok=True)
+
+        # Assuming icon is in the installed package
+        icon_path = venv_path / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" \
+                    / "site-packages" / APP_NAME / "assets" / "icon.png"
+
+        for cmd, module_target in CMD_DICT.items():
+            # Only GUI apps need desktop files
+            if "gui" in cmd.lower():
+                desktop_file = desktop_dir / f"{cmd}.desktop"
+                desktop_file.write_text(f"""[Desktop Entry]
+Version=1.0
+Type=Application
+Name={cmd}
+Comment=
+Icon={icon_path}
+Exec={bin_dir / cmd}
+Terminal=false
+""")
+                print(f"Created {desktop_file}")
 
 def status(args):
     base = Path(args.base).resolve()
@@ -153,6 +232,15 @@ def status(args):
     else:
         print(f"Installed versions: {', '.join(versions) if versions else 'none'}")
 
+def ensure_pip(venv_path: Path):
+    python_exe = venv_path / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
+    try:
+        subprocess.check_call([str(python_exe), "-m", "pip", "--version"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        print("Installing pip into virtualenv...")
+        subprocess.check_call([str(python_exe), "-m", "ensurepip", "--upgrade"])
+        subprocess.check_call([str(python_exe), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
 
 def main():
     args = parse_args()
@@ -169,6 +257,7 @@ def main():
         venv_path = base / version / "venv"
 
         create_venv(venv_path)
+        ensure_pip(venv_path)
         install_wheel(venv_path, wheel_path)
         create_launchers(base, version, venv_path, args.mode)
         print(f"{APP_NAME} version {version} installed successfully")
