@@ -26,7 +26,22 @@ class Installer:
 
     ENV_KEY = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 
-    def __init__(self, handle_cmd_line=True):
+    DISPLAY_ATTR_BRIGHT = 1
+    DISPLAY_ATTR_FG_GREEN = 32
+    DISPLAY_ATTR_FG_RED = 31
+    DISPLAY_RESET_ESCAPE_SEQ = "\x1b[0m"
+
+    @staticmethod
+    def GetInfoEscapeSeq():
+        """@return the info level ANSI escape sequence."""
+        return "\x1b[{:01d};{:02d}m".format(Installer.DISPLAY_ATTR_FG_GREEN, Installer.DISPLAY_ATTR_BRIGHT)
+
+    @staticmethod
+    def GetErrorEscapeSeq():
+        """@return the warning level ANSI escape sequence."""
+        return "\x1b[{:01d};{:02d}m".format(Installer.DISPLAY_ATTR_FG_RED, Installer.DISPLAY_ATTR_BRIGHT)
+
+    def __init__(self, handle_cmd_line=True, color=True):
         """@brief Constructor
            @param handle_cmd_line If True then the command lines arguments are processed in the constructor.
                                   If False then the following methods should be called after the caller
@@ -35,12 +50,33 @@ class Installer:
                                   parse_args()
                                   process_cmdline()
                                   """
+        self._colour = color
+        system = platform.system()
+        # On Windows we don't try to display color text as the terminal window does not interpret the VT100 escape codes.
+        if system == "Windows":
+            self._colour = False
         if self.APP_NAME is None or self.CMD_DICT is None:
             raise Exception("BUG: Installer.APP_NAME and Installer.CMD_DICT must be defined in subclass of the Installer class.")
 
         if handle_cmd_line:
             self.parse_args()
             self.process_cmdline()
+
+    def info(self, text):
+        """@brief Present an info level message to the user.
+           @param text The line of text to be presented to the user."""
+        if self._colour:
+            print('{}INFO{}:  {}'.format(Installer.GetInfoEscapeSeq(), Installer.DISPLAY_RESET_ESCAPE_SEQ, text))
+        else:
+            print('INFO:  {}'.format(text))
+
+    def error(self, text):
+        """@brief Present an error level message to the user.
+           @param text The line of text to be presented to the user."""
+        if self._colour:
+            print('{}ERROR{}: {}'.format(Installer.GetErrorEscapeSeq(), Installer.DISPLAY_RESET_ESCAPE_SEQ, text), file=sys.stderr)
+        else:
+            print('ERROR: {}'.format(text), file=sys.stderr)
 
     def parse_args(self):
         parser = argparse.ArgumentParser(description=f"{self.APP_NAME} installer")
@@ -92,7 +128,7 @@ class Installer:
             self.die("Unknown command")
 
     def die(self, msg):
-        print(f"ERROR: {msg}", file=sys.stderr)
+        self.error(f"{msg}")
         sys.exit(1)
 
     def get_bin_dir(self, mode):
@@ -187,7 +223,7 @@ class Installer:
         base = Path(self.args.base).resolve()
         version = self.select_version(base, self.args.version, self.args.latest)
 
-        print(f"Switching {self.APP_NAME} to version {version}")
+        self.info(f"Switching {self.APP_NAME} to version {version}")
 
         # Remove current global launchers
         self.remove_active_launchers(base, self.args.mode)
@@ -203,7 +239,7 @@ class Installer:
         # Update ptr to current version
         self.set_current_version(base, version)
 
-        print(f"{self.APP_NAME} now using version {version}")
+        self.info(f"{self.APP_NAME} now using version {version}")
 
     def create_venv(self, venv_path: Path, python=sys.executable):
         if not venv_path.exists():
@@ -313,7 +349,7 @@ class Installer:
     def remove_version(self, version: str, base: Path, mode: str):
         version_path = base / version
         if not version_path.exists():
-            print(f"Version {version} not found")
+            self.info(f"Version {version} not found")
             return
 
         system = platform.system()
@@ -327,11 +363,28 @@ class Installer:
             # ----- CLI launchers -----
             launcher = bin_dir / cmd
             if launcher.exists() or launcher.is_symlink():
+                # If gui is in the cmd name then we would have tried to create a icon launcher when it was installed.
+                if "gui" in cmd.lower():
+                    # Try running it with the --remove_launcher argument (see p3lib launcher.py)
+                    # to remove and launcher created previously.
+                    try:
+                        subprocess.check_call([launcher, "--remove_launcher"])
+                    except Exception as ex:
+                        # Fail silently as cmd may not support the create gui launcher functionality
+                        pass
+
                 try:
                     target = launcher.resolve()
+                    # If this is a link to a file in the venv
                     if str(version_path) in str(target):
                         launcher.unlink()
-                        print(f"Removed {launcher}")
+                        self.info(f"Removed {launcher}")
+
+                    # If this is a startup file in the ~/.local folder
+                    elif target.is_file():
+                        launcher.unlink()
+                        self.info(f"Removed {launcher}")
+
                 except Exception:
                     launcher.unlink(missing_ok=True)
 
@@ -342,32 +395,23 @@ class Installer:
                     txt = bat.read_text(errors="ignore")
                     if str(version_path) in txt:
                         bat.unlink()
-                        print(f"Removed {bat}")
-
-            # Linux .desktop
-            if system == "Linux":
-                desktop = desktop_dir / f"{cmd}.desktop"
-                if desktop.exists():
-                    txt = desktop.read_text(errors="ignore")
-                    if str(version_path) in txt:
-                        desktop.unlink()
-                        print(f"Removed {desktop}")
+                        self.info(f"Removed {bat}")
 
             # macOS .app
             if system == "Darwin":
                 app = mac_app_dir / f"{cmd}.app"
                 if app.exists():
                     shutil.rmtree(app, ignore_errors=True)
-                    print(f"Removed {app}")
+                    self.info(f"Removed {app}")
 
         shutil.rmtree(version_path, ignore_errors=True)
-        print(f"Removed version {version}")
+        self.info(f"Removed version {version}")
 
     def uninstall(self):
         base = Path(self.args.base).resolve()
 
         if not base.exists():
-            print("Nothing installed")
+            self.info("Nothing installed")
             return
 
         if self.args.all:
@@ -472,7 +516,7 @@ set VENV_DIR={venv_dir}
 call "%VENV_DIR%\\Scripts\\activate.bat"
 python -m {self.APP_NAME}.{cmd} %*
 """)
-                print(f"Created {launcher}")
+                self.info(f"Created {launcher}")
 
             # Ensure the bin folder is on the system PATH
             path_changed = self.add_to_user_path(bin_dir)
@@ -515,7 +559,7 @@ exec "{entrypoint}" "$@"
                         launcher.unlink()
                     launcher.symlink_to(wrapper_script)
 
-                print(f"Created {launcher}")
+                self.info(f"Created {launcher}")
 
             # Optional: create .desktop files for GUI commands
             desktop_dir = Path.home() / ".local" / "share" / "applications"
@@ -524,21 +568,20 @@ exec "{entrypoint}" "$@"
             # Assuming icon is in the installed package
             icon_path = venv_path / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages" / self.APP_NAME / "assets" / "icon.png"
 
-            if system == "Linux":
-                for cmd, module_target in self.CMD_DICT.items():
-                    # Only GUI apps need desktop files
-                    if "gui" in cmd.lower():
-                        desktop_file = desktop_dir / f"{cmd}.desktop"
-                        desktop_file.write_text(f"""[Desktop Entry]
-Version=1.0
-Type=Application
-Name={cmd}
-Comment=
-Icon={icon_path}
-Exec={bin_dir / cmd}
-Terminal=false
-""")
-                        print(f"Created {desktop_file}")
+            for cmd, module_target in self.CMD_DICT.items():
+                # If the command starts a gui
+                if "gui" in cmd.lower():
+                    # Try running it with the -a argument (see p3lib launcher.py)
+                    # This supports creation of a GUI launcher with an icon on
+                    # Linux, Windows and macos platforms.
+                    # On Windows and macos an icon is created on the desktop.
+                    # On Linux platforms a gnome application launcher is created.
+                    try:
+                        full_cmd = bin_dir / cmd
+                        subprocess.check_call([full_cmd, "--add_launcher"])
+                    except Exception as ex:
+                        # Fail silently as cmd may not support the create gui launcher functionality
+                        pass
 
         # Create a file to track ownership of launchers
         meta = {
@@ -590,13 +633,13 @@ Terminal=false
             return
 
         if not versions:
-            print("No versions installed")
+            self.info("No versions installed")
             return
 
-        print("Installed versions:")
+        self.info("Installed versions:")
         for v in versions:
             mark = "*" if v == current else " "
-            print(f" {mark} {v}")
+            self.info(f" {mark} {v}")
 
     def ensure_pip(self, venv_path: Path):
         python_exe = venv_path / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
@@ -604,7 +647,7 @@ Terminal=false
             subprocess.check_call([str(python_exe), "-m", "pip", "--version"],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
-            print("Installing pip into virtualenv...")
+            self.info("Installing pip into virtualenv...")
             subprocess.check_call([str(python_exe), "-m", "ensurepip", "--upgrade"])
             subprocess.check_call([str(python_exe), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
 
@@ -624,7 +667,7 @@ Terminal=false
         self.install_wheel(venv_path, wheel_path)
         self.create_launchers(base, version, venv_path)
         self.set_current_version(base, version)
-        print(f"{self.APP_NAME} version {version} installed successfully")
+        self.info(f"{self.APP_NAME} version {version} installed successfully")
 
 # The Installer class must be extended to be used and the
 # APP_NAME and CMD_DICT attributes must be set.
