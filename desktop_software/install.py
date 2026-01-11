@@ -7,8 +7,8 @@ Features:
 - Multiple version support
 - Linux/macOS wrapper scripts with CLI args forwarding
 - Windows .bat launchers
-- Automatic .desktop file creation on Linux
-- install, uninstall, status commands
+- Automatic gui launcher icon creation on Linux, Windows and macos
+- install, uninstall, status and switch commands
 """
 
 import argparse
