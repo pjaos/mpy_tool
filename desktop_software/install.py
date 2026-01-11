@@ -666,8 +666,8 @@ exec "{entrypoint}" "$@"
         self.info(f"{self.APP_NAME} version {version} installed successfully")
 
 
-# The Installer class must be extended to be used and the
-# APP_NAME and CMD_DICT attributes must be set.
+# The Installer class must be extended to be used.
+# The APP_NAME and CMD_DICT attributes must be set.
 class MpyToolInstaller(Installer):
     APP_NAME = "mpy_tool"
     CMD_DICT = {
