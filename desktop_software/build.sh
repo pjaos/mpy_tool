@@ -2,6 +2,7 @@
 rm dist/*.tar.gz
 rm dist/*.whl
 ./check_code.sh # Run some checks on the code before building it
+cp pyproject.toml src/mpy_tool/assets
 python3 copy_examples.py # Copy the examples folder to the assets folder so
                          # that the examples are available once installed.
 # Use poetry command to build python wheel
