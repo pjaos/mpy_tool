@@ -571,7 +571,7 @@ exec "{entrypoint}" "$@"
             for cmd, module_target in self.CMD_DICT.items():
                 # If the command starts a gui
                 if "gui" in cmd.lower():
-                    # Try running it with the -a argument (see p3lib launcher.py)
+                    # Try running it with the --add_launcher argument (see p3lib launcher.py)
                     # This supports creation of a GUI launcher with an icon on
                     # Linux, Windows and macos platforms.
                     # On Windows and macos an icon is created on the desktop.
