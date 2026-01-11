@@ -40,6 +40,24 @@ def die(msg):
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
 
+def get_bin_dir(mode):
+    system = platform.system()
+    if system == "Windows":
+        return (
+            Path.home() / "AppData" / "Local" / "Programs" / APP_NAME / "bin"
+            if mode == "user"
+            else Path("C:/Program Files") / APP_NAME / "bin"
+        )
+    else:
+        return Path.home() / ".local" / "bin" if mode == "user" else Path("/usr/local/bin")
+
+
+def get_desktop_dir():
+    return Path.home() / ".local" / "share" / "applications"
+
+
+def get_macos_app_dir():
+    return Path.home() / "Applications"   # this is where your installer puts .app
 
 def parse_args():
     parser = argparse.ArgumentParser(description=f"{APP_NAME} installer")
@@ -90,54 +108,139 @@ def install_wheel(venv_path: Path, wheel: Path):
     subprocess.check_call([str(python_exe), "-m", "pip", "install", "--upgrade", str(wheel)])
 
 
+def remove_launchers_for_version(base, version, mode):
+    system = platform.system()
+    bin_dir = get_bin_dir(mode)
+    desktop_dir = get_desktop_dir()
+    mac_app_dir = get_macos_app_dir()
+
+    meta_file = base / version / "install.json"
+    if not meta_file.exists():
+        return
+
+    meta = json.loads(meta_file.read_text())
+    cmds = meta["commands"]
+
+    for cmd in cmds:
+        # Linux/macOS shell wrappers
+        p = bin_dir / cmd
+        if p.exists() or p.is_symlink():
+            try:
+                target = p.resolve()
+                if str(base / version) in str(target):
+                    p.unlink()
+            except Exception:
+                pass
+
+        # Linux .desktop files
+        desktop = desktop_dir / f"{cmd}.desktop"
+        if desktop.exists():
+            desktop.unlink()
+
+        # macOS .app bundles
+        app = mac_app_dir / f"{cmd}.app"
+        if app.exists():
+            shutil.rmtree(app, ignore_errors=True)
+
+
+def remove_windows_launchers(mode):
+    bin_dir = get_bin_dir(mode)
+    if not bin_dir.exists():
+        return
+    for cmd in CMD_DICT:
+        bat = bin_dir / f"{cmd}.bat"
+        if bat.exists():
+            bat.unlink()
+
+
+def remove_from_user_path(dir_to_remove):
+    dir_to_remove = str(dir_to_remove).lower().rstrip("\\")
+    current = get_user_path()
+    parts = [p for p in current.split(";") if p]
+
+    new_parts = []
+    for p in parts:
+        if p.lower().rstrip("\\") != dir_to_remove:
+            new_parts.append(p)
+
+    new = ";".join(new_parts)
+    if new != current:
+        set_user_path(new)
+        return True
+    return False
+
+def load_install_record(version_path: Path):
+    f = version_path / "install.json"
+    if not f.exists():
+        die(f"Missing install.json in {version_path}")
+    return json.loads(f.read_text())
+
+
 def uninstall(args):
     base = Path(args.base).resolve()
+    bin_dir = Path.home() / ".local" / "bin" if args.mode == "user" else Path("/usr/local/bin")
+    desktop_dir = Path.home() / ".local" / "share" / "applications"
 
+    def load_install_record(version_path: Path):
+        f = version_path / "install.json"
+        if not f.exists():
+            die(f"Missing install.json in {version_path}")
+        return json.loads(f.read_text())
+
+    def remove_version(version):
+        version_path = base / version
+        if not version_path.exists():
+            print(f"Version {version} not found")
+            return
+
+        record = load_install_record(version_path)
+        commands = record.get("commands", [])
+
+        # Remove launchers
+        for cmd in commands:
+            launcher = bin_dir / cmd
+
+            if launcher.is_symlink():
+                try:
+                    target = launcher.resolve()
+                    if str(version_path) in str(target):
+                        launcher.unlink()
+                        print(f"Removed launcher {launcher}")
+                except FileNotFoundError:
+                    launcher.unlink()
+
+            elif launcher.exists():
+                try:
+                    if str(version_path) in launcher.read_text():
+                        launcher.unlink()
+                        print(f"Removed launcher {launcher}")
+                except Exception:
+                    pass
+
+        # Remove .desktop files (Linux only)
+        if platform.system() == "Linux":
+            for cmd in commands:
+                desktop_file = desktop_dir / f"{cmd}.desktop"
+                if desktop_file.exists():
+                    text = desktop_file.read_text()
+                    if str(version_path) in text:
+                        desktop_file.unlink()
+                        print(f"Removed {desktop_file}")
+
+        shutil.rmtree(version_path)
+        print(f"Removed version {version}")
+
+    # ---------- control flow ----------
     if args.all:
-        shutil.rmtree(base, ignore_errors=True)
-        print("All versions removed")
-
-        # Remove symlinks in bin_dir
-        bin_dir = Path.home() / ".local" / "bin" if args.mode == "user" else Path("/usr/local/bin")
-        for cmd in CMD_DICT:
-            path = bin_dir / cmd
-            if path.is_symlink() or path.exists():
-                path.unlink(missing_ok=True)
-
-        # Remove .desktop files
-        desktop_dir = Path.home() / ".local" / "share" / "applications"
-        for cmd in CMD_DICT:
-            desktop_file = desktop_dir / f"{cmd}.desktop"
-            if desktop_file.exists():
-                desktop_file.unlink()
-
+        for version in all_versions(base):
+            remove_version(version)
         return
 
     if args.version:
-        version_path = base / args.version
-        if version_path.exists():
-            shutil.rmtree(version_path)
-            print(f"Removed version {args.version}")
+        remove_version(args.version)
+        return
 
-            # Remove symlinks in bin_dir
-            bin_dir = Path.home() / ".local" / "bin" if args.mode == "user" else Path("/usr/local/bin")
-            for cmd in CMD_DICT:
-                path = bin_dir / cmd
-                # Only unlink if it points to this version’s wrapper
-                if path.is_symlink() and version_path in str(path.resolve()):
-                    path.unlink()
-
-            # Remove .desktop files for this version
-            desktop_dir = Path.home() / ".local" / "share" / "applications"
-            for cmd in CMD_DICT:
-                desktop_file = desktop_dir / f"{cmd}.desktop"
-                if desktop_file.exists():
-                    desktop_file.unlink()
-
-        else:
-            print(f"Version {args.version} not found")
-    else:
-        die("Specify --all or --version to uninstall")
+    die("Specify --all or --version")
 
 
 ENV_KEY = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
@@ -205,7 +308,7 @@ def ask_reboot():
         )
 
 
-def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
+def create_launchers(args, base: Path, version: str, venv_path: Path, mode: str):
     """
     Create CLI launchers and Linux .desktop files.
 
@@ -215,13 +318,8 @@ def create_launchers(base: Path, version: str, venv_path: Path, mode: str):
     """
 
     system = platform.system()
-
+    bin_dir = get_bin_dir(args.mode)
     if system == "Windows":
-        bin_dir = (
-            Path.home() / "AppData" / "Local" / "Programs" / APP_NAME / "bin"
-            if mode == "user"
-            else Path("C:/Program Files") / APP_NAME / "bin"
-        )
         bin_dir.mkdir(parents=True, exist_ok=True)
 
         venv_dir = str(venv_path)
@@ -253,7 +351,6 @@ python -m {APP_NAME}.{cmd} %*
 
     else:
         # Linux / macOS
-        bin_dir = Path.home() / ".local" / "bin" if mode == "user" else Path("/usr/local/bin")
         bin_dir.mkdir(parents=True, exist_ok=True)
 
         wrapper_dir = base / version / "launchers"
@@ -313,6 +410,14 @@ Terminal=false
 """)
                     print(f"Created {desktop_file}")
 
+    # Create a file to track ownership of launchers
+    meta = {
+        "version": version,
+        "commands": list(CMD_DICT.keys())
+    }
+    meta_file = base / version / "install.json"
+    meta_file.write_text(json.dumps(meta, indent=2))
+
 def status(args):
     base = Path(args.base).resolve()
     versions = all_versions(base)
@@ -348,7 +453,7 @@ def main():
         create_venv(venv_path)
         ensure_pip(venv_path)
         install_wheel(venv_path, wheel_path)
-        create_launchers(base, version, venv_path, args.mode)
+        create_launchers(args, base, version, venv_path, args.mode)
         print(f"{APP_NAME} version {version} installed successfully")
 
     elif args.command == "uninstall":
