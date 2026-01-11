@@ -622,7 +622,7 @@ Terminal=false
         self.create_venv(venv_path)
         self.ensure_pip(venv_path)
         self.install_wheel(venv_path, wheel_path)
-        self.create_launchers(base, version, venv_path, self.args.mode)
+        self.create_launchers(base, version, venv_path)
         self.set_current_version(base, version)
         print(f"{self.APP_NAME} version {version} installed successfully")
 
