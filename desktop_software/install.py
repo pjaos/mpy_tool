@@ -83,6 +83,13 @@ def parse_args():
     p.add_argument("--json", action="store_true", help="JSON output")
     p.add_argument("--mode", choices=["user", "system"], default="user")
 
+    # Switch
+    p = sub.add_parser("switch")
+    p.add_argument("version", nargs="?", help="Version to activate")
+    p.add_argument("--latest", action="store_true", help="Switch to highest installed version")
+    p.add_argument("--base", default=str(Path.home() / f".{APP_NAME}"))
+    p.add_argument("--mode", choices=["user", "system"], default="user")
+
     return parser.parse_args()
 
 
@@ -96,6 +103,86 @@ def detect_version_from_wheel(wheel_path: Path):
     if not m:
         die(f"Could not auto-detect version from wheel filename '{wheel_path.name}'")
     return m.group(1)
+
+
+def select_version(base: Path, requested: str | None, latest: bool):
+    versions = all_versions(base)
+    if not versions:
+        die("No versions installed")
+
+    if latest:
+        return versions[-1]
+
+    if not requested:
+        die("Specify a version or --latest")
+
+    if requested not in versions:
+        die(f"Version {requested} is not installed")
+
+    return requested
+
+
+def remove_active_launchers(base: Path, mode: str):
+    """
+    Remove all launchers that point into ~/.mpy_tool.
+    Works even if install.json is missing.
+    """
+    bin_dir = get_bin_dir(mode)
+    system = platform.system()
+
+    if not bin_dir.exists():
+        return
+
+    for p in bin_dir.iterdir():
+        if system == "Windows" and p.suffix == ".bat":
+            txt = p.read_text(errors="ignore")
+            if str(base) in txt:
+                p.unlink()
+        else:
+            if p.is_symlink():
+                try:
+                    if str(base) in str(p.resolve()):
+                        p.unlink()
+                except Exception:
+                    pass
+
+
+def remove_active_gui_launchers(base: Path):
+    system = platform.system()
+
+    if system == "Linux":
+        d = get_desktop_dir()
+        if d.exists():
+            for f in d.glob("*.desktop"):
+                txt = f.read_text(errors="ignore")
+                if str(base) in txt:
+                    f.unlink()
+
+    if system == "Darwin":
+        d = get_macos_app_dir()
+        if d.exists():
+            for app in d.glob("*.app"):
+                shutil.rmtree(app, ignore_errors=True)
+
+
+def switch_version(args):
+    base = Path(args.base).resolve()
+    version = select_version(base, args.version, args.latest)
+
+    print(f"Switching {APP_NAME} to version {version}")
+
+    # Remove current global launchers
+    remove_active_launchers(base, args.mode)
+    remove_active_gui_launchers(base)
+
+    venv = base / version / "venv"
+    if not venv.exists():
+        die(f"Broken install: {venv} missing")
+
+    # Recreate launchers for this version
+    create_launchers(args, base, version, venv, args.mode)
+
+    print(f"{APP_NAME} now using version {version}")
 
 
 def create_venv(venv_path: Path, python=sys.executable):
@@ -458,13 +545,56 @@ Terminal=false
     meta_file = base / version / "install.json"
     meta_file.write_text(json.dumps(meta, indent=2))
 
+
+def current_link(base):
+    return base / "current"
+
+
+def get_current_version(base):
+    p = current_link(base)
+    if not p.exists():
+        return None
+
+    if p.is_symlink():
+        return p.resolve().name
+    else:
+        return p.read_text().strip()
+
+def set_current_version(base, version):
+    p = current_link(base)
+    target = base / version
+
+    if platform.system() == "Windows":
+        p.write_text(version)
+    else:
+        if p.exists() or p.is_symlink():
+            p.unlink()
+        p.symlink_to(target)
+
+
 def status(args):
     base = Path(args.base).resolve()
     versions = all_versions(base)
+    current = get_current_version(base)
+
     if args.json:
-        print(json.dumps({"versions": versions}, indent=2))
-    else:
-        print(f"Installed versions: {', '.join(versions) if versions else 'none'}")
+        print(json.dumps({
+            "current": current,
+            "installed": versions
+        }, indent=2))
+        return
+
+    if not versions:
+        print("No versions installed")
+        return
+
+    print("Installed versions:")
+    for v in versions:
+        if v == 'current':
+            continue
+        mark = "*" if v == current else " "
+        print(f" {mark} {v}")
+
 
 def ensure_pip(venv_path: Path):
     python_exe = venv_path / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
@@ -476,31 +606,39 @@ def ensure_pip(venv_path: Path):
         subprocess.check_call([str(python_exe), "-m", "ensurepip", "--upgrade"])
         subprocess.check_call([str(python_exe), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
 
+def install(args):
+    base = Path(args.base).resolve()
+    wheel_path = Path(args.wheel)
+    if not wheel_path.exists():
+        die(f"Wheel file '{wheel_path}' does not exist")
+
+    # Auto-detect version if not provided
+    version = args.version or detect_version_from_wheel(wheel_path)
+    base.mkdir(parents=True, exist_ok=True)
+    venv_path = base / version / "venv"
+
+    create_venv(venv_path)
+    ensure_pip(venv_path)
+    install_wheel(venv_path, wheel_path)
+    create_launchers(args, base, version, venv_path, args.mode)
+    set_current_version(base, version)
+    print(f"{APP_NAME} version {version} installed successfully")
+
+
 def main():
     args = parse_args()
-    base = Path(args.base).resolve()
 
     if args.command == "install":
-        wheel_path = Path(args.wheel)
-        if not wheel_path.exists():
-            die(f"Wheel file '{wheel_path}' does not exist")
-
-        # Auto-detect version if not provided
-        version = args.version or detect_version_from_wheel(wheel_path)
-        base.mkdir(parents=True, exist_ok=True)
-        venv_path = base / version / "venv"
-
-        create_venv(venv_path)
-        ensure_pip(venv_path)
-        install_wheel(venv_path, wheel_path)
-        create_launchers(args, base, version, venv_path, args.mode)
-        print(f"{APP_NAME} version {version} installed successfully")
+        install(args)
 
     elif args.command == "uninstall":
         uninstall(args)
 
     elif args.command == "status":
         status(args)
+
+    elif args.command == "switch":
+        switch_version(args)
 
     else:
         die(f"Unknown command: {args.command}")
