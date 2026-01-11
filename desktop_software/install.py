@@ -20,6 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 class Installer:
     APP_NAME = None
     CMD_DICT = None
@@ -354,7 +355,6 @@ class Installer:
 
         system = platform.system()
         bin_dir = self.get_bin_dir(mode)
-        desktop_dir = self.get_desktop_dir()
         mac_app_dir = self.get_macos_app_dir()
 
         commands = self.get_installed_commands(version_path)
@@ -369,7 +369,7 @@ class Installer:
                     # to remove and launcher created previously.
                     try:
                         subprocess.check_call([launcher, "--remove_launcher"])
-                    except Exception as ex:
+                    except Exception:
                         # Fail silently as cmd may not support the create gui launcher functionality
                         pass
 
@@ -565,9 +565,6 @@ exec "{entrypoint}" "$@"
             desktop_dir = Path.home() / ".local" / "share" / "applications"
             desktop_dir.mkdir(parents=True, exist_ok=True)
 
-            # Assuming icon is in the installed package
-            icon_path = venv_path / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages" / self.APP_NAME / "assets" / "icon.png"
-
             for cmd, module_target in self.CMD_DICT.items():
                 # If the command starts a gui
                 if "gui" in cmd.lower():
@@ -579,7 +576,7 @@ exec "{entrypoint}" "$@"
                     try:
                         full_cmd = bin_dir / cmd
                         subprocess.check_call([full_cmd, "--add_launcher"])
-                    except Exception as ex:
+                    except Exception:
                         # Fail silently as cmd may not support the create gui launcher functionality
                         pass
 
@@ -595,7 +592,6 @@ exec "{entrypoint}" "$@"
         return base / "current"
 
     def get_current_version(self, base):
-        current_version = None
         p = self.current_link(base)
         if not p.exists():
             return None
@@ -669,6 +665,7 @@ exec "{entrypoint}" "$@"
         self.set_current_version(base, version)
         self.info(f"{self.APP_NAME} version {version} installed successfully")
 
+
 # The Installer class must be extended to be used and the
 # APP_NAME and CMD_DICT attributes must be set.
 class MpyToolInstaller(Installer):
@@ -684,6 +681,7 @@ class MpyToolInstaller(Installer):
 def main():
     # All that is needed is for the extended class to be instantiated.
     MpyToolInstaller()
+
 
 if __name__ == "__main__":
     main()
