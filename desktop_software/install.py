@@ -112,8 +112,11 @@ class Installer:
     def get_macos_app_dir(self):
         return Path.home() / "Applications"   # this is where your installer puts .app
 
-    def all_versions(self, base: Path):
-        return sorted([d.name for d in base.iterdir() if d.is_dir()])
+    def all_versions(self, base):
+        return sorted(
+            d.name for d in base.iterdir()
+            if d.is_dir() and d.name != "current"
+        )
 
     def detect_version_from_wheel(self, wheel_path: Path):
         # Example: mpy_tool-0.45-py3-none-any.whl → 0.45
@@ -157,7 +160,8 @@ class Installer:
             else:
                 if p.is_symlink():
                     try:
-                        if str(base) in str(p.resolve()):
+                        resolved = p.resolve()
+                        if resolved.is_relative_to(base):
                             p.unlink()
                     except Exception:
                         pass
@@ -194,7 +198,7 @@ class Installer:
             self.die(f"Broken install: {venv} missing")
 
         # Recreate launchers for this version
-        self.create_launchers(base, version, venv, self.args.mode)
+        self.create_launchers(base, version, venv)
 
         # Update ptr to current version
         self.set_current_version(base, version)
@@ -435,7 +439,7 @@ class Installer:
                 None, "runas", "shutdown", "/r /t 5", None, 1
             )
 
-    def create_launchers(self, base: Path, version: str, venv_path: Path, mode: str):
+    def create_launchers(self, base: Path, version: str, venv_path: Path):
         """
         Create CLI launchers and Linux .desktop files.
 
@@ -553,12 +557,14 @@ Terminal=false
         if not p.exists():
             return None
 
-        if p.is_symlink():
-            current_version = p.resolve().name
-        else:
-            current_version = p.read_text().strip()
-
-        return current_version
+        try:
+            if p.is_symlink():
+                return p.resolve().name
+            else:
+                v = p.read_text().strip()
+                return v if v else None
+        except Exception:
+            return None
 
     def set_current_version(self, base, version):
         p = self.current_link(base)
@@ -589,8 +595,6 @@ Terminal=false
 
         print("Installed versions:")
         for v in versions:
-            if v == 'current':
-                continue
             mark = "*" if v == current else " "
             print(f" {mark} {v}")
 
