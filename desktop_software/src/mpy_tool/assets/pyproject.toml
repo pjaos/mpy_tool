@@ -1,21 +1,11 @@
 [tool.poetry]
 name = "mpy_tool"
-version = "0.45"
+version = "0.47"
 description = ""
 authors = ["Paul Austen <pjaos@gmail.com>"]
 readme = "README.md"
 packages = [
-    { include = "mpy_tool" , from = "src"},
-    { include = "lib" , from = "src"},
-]
-#include = [
-#    { path = "assets/**", format = ["sdist", "wheel"] },
-#    { path = "pyproject.toml", format = ["sdist", "wheel"] },
-#]
-
-[tool.hatch.build.targets.wheel]
-include = [
-  "mpy_tool/assets/**"
+    { include = "mpy_tool", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -24,9 +14,9 @@ python = ">=3.12,<3.14"
 # Cross-platform packages
 paramiko = "*"
 retry = "*"
-p3lib = "^1.1.140"
+p3lib = "^1.1.144"
 esptool = "^5.1.0"
-nicegui = "3.4.1"
+nicegui = "3.5"
 pyflakes = "*"
 rshell = "*"
 mpy_cross = "*"
@@ -36,6 +26,7 @@ plotly = "*"
 pillow = "*"
 requests = "*"
 mpremote = "*"
+
 
 # Windows-only dependencies
 pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
