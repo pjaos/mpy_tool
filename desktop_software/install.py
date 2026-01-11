@@ -176,68 +176,108 @@ def load_install_record(version_path: Path):
     return json.loads(f.read_text())
 
 
+def get_installed_commands(version_path: Path):
+    """
+    Return list of commands belonging to this version.
+    Works even if install.json is missing.
+    """
+    meta = version_path / "install.json"
+    if meta.exists():
+        try:
+            data = json.loads(meta.read_text())
+            return data.get("commands", [])
+        except Exception:
+            pass
+
+    # Fallback: inspect venv/bin
+    venv = version_path / "venv"
+    if platform.system() == "Windows":
+        bin_dir = venv / "Scripts"
+        exts = (".exe", ".bat", ".cmd")
+    else:
+        bin_dir = venv / "bin"
+        exts = ("",)
+
+    cmds = []
+    if bin_dir.exists():
+        for p in bin_dir.iterdir():
+            for ext in exts:
+                if p.name == p.stem + ext:
+                    if p.stem in CMD_DICT:
+                        cmds.append(p.stem)
+
+    # Final fallback (very old installs)
+    return list(CMD_DICT.keys())
+
+
+def remove_version(version: str, base: Path, mode: str):
+    version_path = base / version
+    if not version_path.exists():
+        print(f"Version {version} not found")
+        return
+
+    system = platform.system()
+    bin_dir = get_bin_dir(mode)
+    desktop_dir = get_desktop_dir()
+    mac_app_dir = get_macos_app_dir()
+
+    commands = get_installed_commands(version_path)
+
+    for cmd in commands:
+        # ----- CLI launchers -----
+        launcher = bin_dir / cmd
+        if launcher.exists() or launcher.is_symlink():
+            try:
+                target = launcher.resolve()
+                if str(version_path) in str(target):
+                    launcher.unlink()
+                    print(f"Removed {launcher}")
+            except Exception:
+                launcher.unlink(missing_ok=True)
+
+        # Windows .bat
+        if system == "Windows":
+            bat = bin_dir / f"{cmd}.bat"
+            if bat.exists():
+                txt = bat.read_text(errors="ignore")
+                if str(version_path) in txt:
+                    bat.unlink()
+                    print(f"Removed {bat}")
+
+        # Linux .desktop
+        if system == "Linux":
+            desktop = desktop_dir / f"{cmd}.desktop"
+            if desktop.exists():
+                txt = desktop.read_text(errors="ignore")
+                if str(version_path) in txt:
+                    desktop.unlink()
+                    print(f"Removed {desktop}")
+
+        # macOS .app
+        if system == "Darwin":
+            app = mac_app_dir / f"{cmd}.app"
+            if app.exists():
+                shutil.rmtree(app, ignore_errors=True)
+                print(f"Removed {app}")
+
+    shutil.rmtree(version_path, ignore_errors=True)
+    print(f"Removed version {version}")
+
+
 def uninstall(args):
     base = Path(args.base).resolve()
-    bin_dir = Path.home() / ".local" / "bin" if args.mode == "user" else Path("/usr/local/bin")
-    desktop_dir = Path.home() / ".local" / "share" / "applications"
 
-    def load_install_record(version_path: Path):
-        f = version_path / "install.json"
-        if not f.exists():
-            die(f"Missing install.json in {version_path}")
-        return json.loads(f.read_text())
+    if not base.exists():
+        print("Nothing installed")
+        return
 
-    def remove_version(version):
-        version_path = base / version
-        if not version_path.exists():
-            print(f"Version {version} not found")
-            return
-
-        record = load_install_record(version_path)
-        commands = record.get("commands", [])
-
-        # Remove launchers
-        for cmd in commands:
-            launcher = bin_dir / cmd
-
-            if launcher.is_symlink():
-                try:
-                    target = launcher.resolve()
-                    if str(version_path) in str(target):
-                        launcher.unlink()
-                        print(f"Removed launcher {launcher}")
-                except FileNotFoundError:
-                    launcher.unlink()
-
-            elif launcher.exists():
-                try:
-                    if str(version_path) in launcher.read_text():
-                        launcher.unlink()
-                        print(f"Removed launcher {launcher}")
-                except Exception:
-                    pass
-
-        # Remove .desktop files (Linux only)
-        if platform.system() == "Linux":
-            for cmd in commands:
-                desktop_file = desktop_dir / f"{cmd}.desktop"
-                if desktop_file.exists():
-                    text = desktop_file.read_text()
-                    if str(version_path) in text:
-                        desktop_file.unlink()
-                        print(f"Removed {desktop_file}")
-
-        shutil.rmtree(version_path)
-        print(f"Removed version {version}")
-
-    # ---------- control flow ----------
     if args.all:
-        for version in all_versions(base):
-            remove_version(version)
+        for v in all_versions(base):
+            remove_version(v, base, args.mode)
         return
 
     if args.version:
-        remove_version(args.version)
+        remove_version(args.version, base, args.mode)
         return
 
     die("Specify --all or --version")
