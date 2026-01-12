@@ -53,9 +53,6 @@ class Installer:
                                   """
         self._colour = color
         system = platform.system()
-        # On Windows we don't try to display color text as the terminal window does not interpret the VT100 escape codes.
-        if system == "Windows":
-            self._colour = False
         if self.APP_NAME is None or self.CMD_DICT is None:
             raise Exception("BUG: Installer.APP_NAME and Installer.CMD_DICT must be defined in subclass of the Installer class.")
 
@@ -362,6 +359,8 @@ class Installer:
         for cmd in commands:
             # ----- CLI launchers -----
             launcher = bin_dir / cmd
+            if system == "Windows" and not launcher.name.endswith(".bat"):
+                launcher = launcher.with_name(launcher.name + ".bat")
             if launcher.exists() or launcher.is_symlink():
                 # If gui is in the cmd name then we would have tried to create a icon launcher when it was installed.
                 if "gui" in cmd.lower():
@@ -565,20 +564,23 @@ exec "{entrypoint}" "$@"
             desktop_dir = Path.home() / ".local" / "share" / "applications"
             desktop_dir.mkdir(parents=True, exist_ok=True)
 
-            for cmd, module_target in self.CMD_DICT.items():
-                # If the command starts a gui
-                if "gui" in cmd.lower():
-                    # Try running it with the --add_launcher argument (see p3lib launcher.py)
-                    # This supports creation of a GUI launcher with an icon on
-                    # Linux, Windows and macos platforms.
-                    # On Windows and macos an icon is created on the desktop.
-                    # On Linux platforms a gnome application launcher is created.
-                    try:
-                        full_cmd = bin_dir / cmd
+        for cmd, module_target in self.CMD_DICT.items():
+            # If the command starts a gui
+            if "gui" in cmd.lower():
+                # Try running it with the --add_launcher argument (see p3lib launcher.py)
+                # This supports creation of a GUI launcher with an icon on
+                # Linux, Windows and macos platforms.
+                # On Windows and macos an icon is created on the desktop.
+                # On Linux platforms a gnome application launcher is created.
+                try:
+                    full_cmd = bin_dir / cmd
+                    if system == "Windows" and not full_cmd.name.endswith(".bat"):
+                        full_cmd = full_cmd.with_name(full_cmd.name + ".bat")
+                    if full_cmd.exists():
                         subprocess.check_call([full_cmd, "--add_launcher"])
-                    except Exception:
-                        # Fail silently as cmd may not support the create gui launcher functionality
-                        pass
+                except Exception:
+                    # Fail silently as cmd may not support the create gui launcher functionality
+                    pass
 
         # Create a file to track ownership of launchers
         meta = {
