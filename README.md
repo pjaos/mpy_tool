@@ -16,26 +16,35 @@ The GUI tool has been tested on Linux, Windows and Mac platforms.
 
 ### Linux
 
-The software is supplied as a python wheel file. This can be found in the desktop_software/linux folder of the git repo.
+The software is supplied as a python wheel file along with an install.py file. These can be found in the desktop_software/linux folder of the git repo or on the github releases page inside the zip file.
 
 Python of at least version 3.12 should be installed on the Linux system.
 
-pipx must also be installed. See https://pipx.pypa.io/latest/installation/ for details of how to install pipx.
+To install the mpy_tool package
 
-Once python and pipx are installed the mpy_tool package can be installed as shown below by running a command from a terminal window.
+- cd to the folder where the linux python wheel sits along with the install.py file.
+- From a terminal window run
+  python3 install.py install 'python wheel filename'
+
+E.G
 
 ```
-pipx install desktop_software/linux/mpy_tool-0.12-py3-none-any.whl
-  installed package mpy_tool 0.12, installed using Python 3.12.3
-  These apps are now globally available
-    - mpy_tool
-    - mpy_tool_gui
-    - mpy_tool_rshell
-done! ✨ 🌟 ✨
+python3 install.py install mpy_tool-0.47-py3-none-any.whl
+Processing ./mpy_tool-0.47-py3-none-any.whl
+Collecting bleak<0.23.0,>=0.22.3 (from mpy-tool==0.47)
+...
+INFO:  Created /home/auser/.local/bin/mpy_tool
+INFO:  Created /home/auser/.local/bin/mpy_tool_gui
+INFO:  Created /home/auser/.local/bin/mpy_tool_rshell
+INFO:  Created /home/auser/.local/bin/mpy_tool_mpremote
+INFO:  Created /home/auser/.local/share/applications/mpy_tool_gui.desktop file.
+INFO:  Created /home/auser/Desktop/mpy_tool_gui.desktop file.
+INFO:  The MPY_Tool gnome launcher was successfully created.
+INFO:  mpy_tool version 0.47 installed successfully
 ```
 
-The mpy_tool_gui command provides the functionality detailed above. The mpy_tool provides the similar functionality from the command line. The mpy_tool_rshell command can be ignored as it is used internally by the other two commands.
-
+The mpy_tool and mpy_tool_gui apps should now be in the user path and may be executed from a terminal window.
+A gnome launcher should be also be available to launch the mpy_tool_gui app.
 
 #### dialout group membership
 
@@ -61,119 +70,53 @@ dialout adm cdrom sudo dip plugdev users lpadmin auser
 ```
 
 
-#### Create Gnome Application Launcher Icon
-
-If you have a Linux distribution that supports gnome application launchers you can create a gnome desktop launcher by running the following command.
-
-```
-mpy_tool_gui -a
-INFO:  Created gnome desktop application launcher
-```
-
-A gnome application launcher should now be available as shown below (press Windows key and enter mpy to view on Ubuntu) which can be used to start the mpy_tool_gui program.
-
-![alt text](images/launcher_icon.png "Launcher Icon")
-
-
 ### Windows
 
-Python of at least version 3.12 should be installed on the Windows system. Python installers for windows can be found at https://www.python.org/downloads/windows/
+The software is supplied as a python wheel file along with an install.py file. These can be found in the desktop_software/windows folder of the git repo or on the github releases page inside the zip file.
 
-pipx must also be installed. See https://pipx.pypa.io/latest/installation/ for details of how to install pipx.
+Python of at least version 3.12 should be installed on the Windows system.
 
+To install the mpy_tool package
 
-The software is supplied as a python wheel file. This can be found in the desktop_software/windows folder. To install the software run the following command from a power shell window.
+- cd to the folder where the windows python wheel sits along with the install.py file.
+- From a powershell window run run
+  python3 install.py install <python wheel filename>
 
-```
-pipx install desktop_software/windows/mpy_tool-0.12-py3-none-any.whl
-  installed package mpy_tool 0.12, installed using Python 3.12.3
-  These apps are now globally available
-    - mpy_tool
-    - mpy_tool_gui
-    - mpy_tool_rshell
-done! ✨ 🌟 ✨
-```
-
-#### Create Windows Shortcut Icon
-
-Once installed you may create a Windows shortcut to launch the mpy_tool_gui program.
+  E.G
 
 ```
-mpy_tool_gui.exe -a
-INFO:  C:\Users\pja\pipx\venvs\mpy-tool\Lib\site-packages\assets\icon.ico icon file found.
-INFO:  C:\Users\pja\Desktop\mpy_tool_gui.lnk shortcut created.
+    python .\install.py install .\mpy_tool-0.47-py3-none-any.whl
+    Processing c:\git_repos\mpy_tool\desktop_software\windows\mpy_tool-0.47-py3-none-any.whl
+    Collecting bleak<0.23.0,>=0.22.3 (from mpy-tool==0.47)
+    ...
+    INFO:  Created C:\Users\auser\AppData\Local\Programs\mpy_tool\bin\mpy_tool.bat
+    INFO:  Created C:\Users\auser\AppData\Local\Programs\mpy_tool\bin\mpy_tool_gui.bat
+    INFO:  Created C:\Users\auser\AppData\Local\Programs\mpy_tool\bin\mpy_tool_rshell.bat
+    INFO:  Created C:\Users\auser\AppData\Local\Programs\mpy_tool\bin\mpy_tool_mpremote.bat
+    INFO:  Converted png file to ico file: c:\users\auser\.mpy_tool\0.47\venv\lib\site-packages\mpy_tool\assets\icon.ico
+    INFO:  C:\Users\auser\Desktop\MPY_Tool.lnk shortcut created.
+    INFO:  mpy_tool version 0.47 installed successfully
 ```
 
-After executing the above command you should find the icon below on the Windows desktop. You should be able to double click this to start the mpy_tool_gui program.
-
-![alt text](images/launcher_icon.png "Launcher Icon")
-
-
+The mpy_tool and mpy_tool_gui apps should now be in the user path and may be executed from a powershell terminal window. A desktop launcher should be also be available to launch the mpy_tool_gui app.
 
 ## MacOS
 
-The software is supplied as a python wheel file. The MacOS installer is the same as the Linux installer and can be found in the desktop_software/linux folder of the git repo.
-
-Python of at least version 3.12 should be installed on the MacOS system. Python installers for MacOS can be found at https://www.python.org/downloads/macos/
-
-pipx must also be installed. See https://pipx.pypa.io/latest/installation/ for details of how to install pipx.
-
-Once python and pipx are installed the mpy_tool package can be installed as shown below by running a command from a terminal window.
-
-```
-pipx install desktop_software/linux/mpy_tool-0.12-py3-none-any.whl
-  installed package mpy_tool 0.12, installed using Python 3.12.3
-  These apps are now globally available
-    - mpy_tool
-    - mpy_tool_gui
-    - mpy_tool_rshell
-done! ✨ 🌟 ✨
-```
-
-The mpy_tool_gui command provides the functionality detailed above. The mpy_tool provides the similar functionality from the command line. The mpy_tool_rshell command can be ignored as it is used internally by the other two commands.
-
-#### Create a desktop launcher icon
-Once installed you may create a desktop icon to launch the mpy_tool_gui program.
-
-Run the following command from a terminal window to create the desktop launcher icon.
-
-```
-mpy_tool_gui -a
-INFO:  Created /Users/pja/Desktop/MPY_Tool.app
-```
-
-After executing the above command you should find the icon below on the desktop. You should be able to double click this to start the mpy_tool_gui program.
-
-![alt text](images/launcher_icon.png "Launcher Icon")
-
-Note that the first time you start the mpy_tool_gui program it may take some time to start up.
-
-
+The installation onto a MacOS platform is the same as for Linux except that a launcher icon for the mpy_tool_gui app should appear on the desktop.
 
 
 # Starting the software
-The mpy_tool_gui program may be started by wither of the options shown below
 
-## Linux
-- If you created the gnome application launcher icon you can double click it or
-- Open a terminal window and enter 'mpy_tool_gui. You may use the -d argument to show debugging information in the Message Log window (-h gives command line help).
+- mpy_tool
+  This provides some of the functionality that mpy_tool_gui provides without a GUI interface (-h arg gives command line help).
 
+- mpy_tool_gui
+  This maybe started from the desktop launcher icons on Windows an MacOS platforms or from the gnome launcher on Linux platforms.
+  On all platforms this can be launched from a terminal window (-h arg gives command line help).
 
-## Windows
-- If you created the windows desktop launcher icon you can double click it or
-- Open a powershell window and enter mpy_tool_gui.exe. You may use the -d argument to show debugging information in the Message Log window (-h gives command line help).
-
-## MacOS
-- If you created the desktop launcher icon you can double click it or
-- Open a terminal window and enter mpy_tool_gui. You may use the -d argument to show debugging information in the Message Log window (-h gives command line help).
-
-
-Once started a web browser window is opened as shown below
+Once mpy_tool_gui is started a web browser window is opened as shown below
 
 ![alt text](images/initial_window.png "Initial Window")
-
-
-
 
 
 # Installing onto an MCU
@@ -215,6 +158,9 @@ The following example applications are provided as the starting point for implem
 
   This has less functionality than the previous example. It allows the user to setup the WiFi using USB or bluetooth connections. Once connected to the WiFi
 the WebREPL interface is available. Click [here](mcu_template_software/examples/project_template_7_README.md) for more info.
+
+These projects are now available in the TEMPLATE_PROJECTS tab. The TEMPLATE_PROJECTS allows the user to copy one of the template projects to a new folder in order to use it as the starting point of a new project. The README doc has not yet been updated to show this.
+
 
 ## Installing software onto a new MCU
 
