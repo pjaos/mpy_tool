@@ -7,3 +7,5 @@ python3 copy_examples.py # Copy the examples folder to the assets folder so
 poetry --output=linux --clean -vvv build
 # Delete the .tar.gz file in dist directory
 rm -f linux/*.tar.gz
+# Put a copy of the install.py alongside the python wheel
+cp install.py linux
