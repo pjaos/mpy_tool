@@ -28,5 +28,6 @@ zip -r "$ZIP_FILE" "$OUTPUT_DIR"
 # Clean up the temporary folder
 rm -rf "$OUTPUT_DIR"
 
+mv $ZIP_FILE github_releases/$ZIP_FILE
 # Success message
-echo "Release zip file created: $ZIP_FILE"
+echo "Release zip file created: github_releases/$ZIP_FILE"
