@@ -344,6 +344,16 @@ class Installer:
         # Final fallback (very old installs)
         return list(self.CMD_DICT.keys())
 
+    def _is_launcher_required(self, cmd):
+        """@brief Determine if a launcher icon is required.
+           @param cmd The cmd to check.
+           @return True if required."""
+        launcher_required = False
+        if cmd in self.CMD_DICT:
+            attr_list = self.CMD_DICT[cmd]
+            launcher_required = attr_list[1]
+        return launcher_required
+
     def remove_version(self, version: str, base: Path, mode: str):
         version_path = base / version
         if not version_path.exists():
@@ -362,8 +372,9 @@ class Installer:
             if system == "Windows" and not launcher.name.endswith(".bat"):
                 launcher = launcher.with_name(launcher.name + ".bat")
             if launcher.exists() or launcher.is_symlink():
+
                 # If gui is in the cmd name then we would have tried to create a icon launcher when it was installed.
-                if "gui" in cmd.lower():
+                if self._is_launcher_required(cmd):
                     # Try running it with the --remove_launcher argument (see p3lib launcher.py)
                     # to remove and launcher created previously.
                     try:
@@ -498,7 +509,8 @@ class Installer:
 
             venv_dir = str(venv_path)
 
-            for cmd, module_target in self.CMD_DICT.items():
+            for cmd, attr_list in self.CMD_DICT.items():
+                module_target = attr_list[0]
                 launcher = bin_dir / f"{cmd}.bat"
                 if module_target:
                     launcher.write_text(
@@ -532,7 +544,8 @@ python -m {self.APP_NAME}.{cmd} %*
 
             python_exe = venv_path / "bin" / "python"
 
-            for cmd, module_target in self.CMD_DICT.items():
+            for cmd, attr_list in self.CMD_DICT.items():
+                module_target = attr_list[0]
                 if module_target:
                     # Command needs python -m module
                     launcher = bin_dir / cmd
@@ -564,9 +577,10 @@ exec "{entrypoint}" "$@"
             desktop_dir = Path.home() / ".local" / "share" / "applications"
             desktop_dir.mkdir(parents=True, exist_ok=True)
 
-        for cmd, module_target in self.CMD_DICT.items():
+        for cmd, attr_list in self.CMD_DICT.items():
+            module_target = attr_list[0]
             # If the command starts a gui
-            if "gui" in cmd.lower():
+            if self._is_launcher_required(cmd):
                 # Try running it with the --add_launcher argument (see p3lib launcher.py)
                 # This supports creation of a GUI launcher with an icon on
                 # Linux, Windows and macos platforms.
@@ -671,12 +685,25 @@ exec "{entrypoint}" "$@"
 # The Installer class must be extended to be used.
 # The APP_NAME and CMD_DICT attributes must be set.
 class MpyToolInstaller(Installer):
+    # All sections mentioned below must be present in the projects pyproject.toml file.
+
+    # APP_NAME
+    # The name of the application as defined in [tool.poetry] sections name parameter
     APP_NAME = "mpy_tool"
+
+    # CMD_DICT
+    # key = the command as defined in the [tool.poetry.scripts] section
+    # value = A list with two elements
+    # 0 = This maybe the module_name.main_filename format. This forces the startup script
+    #     to use the form 'python -m module_name.main_filename' to start the program.
+    #     If left as an empty string then the startup script created in the python wheel
+    #     from the pyproject.toml [tool.poetry.scripts] is used.
+    # 1 = If True then a launcher icon is created.
     CMD_DICT = {
-        "mpy_tool": "",
-        "mpy_tool_gui": "mpy_tool.mpy_tool_gui",
-        "mpy_tool_rshell": "",
-        "mpy_tool_mpremote": ""
+        "mpy_tool": ("", False),
+        "mpy_tool_gui": ("mpy_tool.mpy_tool_gui", True),
+        "mpy_tool_rshell": ("", False),
+        "mpy_tool_mpremote": ("", False),
     }
 
 
