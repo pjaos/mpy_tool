@@ -32,6 +32,16 @@ class Installer:
     DISPLAY_ATTR_FG_RED = 31
     DISPLAY_RESET_ESCAPE_SEQ = "\x1b[0m"
 
+    INSTALL_ARG = "install"
+    UNINSTALL_ARG = "uninstall"
+    STATUS_ARG = "status"
+    SWITCH_ARG = "switch"
+    ALL_COMMANDS = (INSTALL_ARG, UNINSTALL_ARG, STATUS_ARG, SWITCH_ARG)
+
+    HELP_ARG_1 = '-h'
+    HELP_ARG_2 = '--help'
+    HELP_ARGS = (HELP_ARG_1, HELP_ARG_2)
+
     @staticmethod
     def GetInfoEscapeSeq():
         """@return the info level ANSI escape sequence."""
@@ -52,7 +62,6 @@ class Installer:
                                   process_cmdline()
                                   """
         self._colour = color
-        system = platform.system()
         if self.APP_NAME is None or self.CMD_DICT is None:
             raise Exception("BUG: Installer.APP_NAME and Installer.CMD_DICT must be defined in subclass of the Installer class.")
 
@@ -77,31 +86,47 @@ class Installer:
             print('ERROR: {}'.format(text), file=sys.stderr)
 
     def parse_args(self):
-        parser = argparse.ArgumentParser(description=f"{self.APP_NAME} installer")
+        # Check to see if the user entered a command
+        user_help_request = False
+        if set(Installer.HELP_ARGS) & set(sys.argv):
+            user_help_request = True
+
+        if not user_help_request:
+            self._cmd_found = False
+            for cmd in Installer.ALL_COMMANDS:
+                if cmd in sys.argv:
+                    self._cmd_found = True
+                    break
+
+            # If no command was entered force an install command.
+            if not self._cmd_found:
+                sys.argv.insert(1, Installer.INSTALL_ARG)
+
+        parser = argparse.ArgumentParser(description=f"{self.APP_NAME}: install is the default command.")
         sub = parser.add_subparsers(dest="command", required=True)
 
         # Install
-        p = sub.add_parser("install")
+        p = sub.add_parser(Installer.INSTALL_ARG)
         p.add_argument("wheel", help="Path to the Python wheel (.whl)")
         p.add_argument("--version", help="Version being installed (auto-detected if omitted)", default=None)
         p.add_argument("--base", help="Installation base path", default=str(Path.home() / f".{self.APP_NAME}"))
         p.add_argument("--mode", choices=["user", "system"], default="user")
 
         # Uninstall
-        p = sub.add_parser("uninstall")
+        p = sub.add_parser(Installer.UNINSTALL_ARG)
         p.add_argument("--all", action="store_true", help="Remove all versions")
         p.add_argument("--version", help="Specific version to remove")
         p.add_argument("--base", help="Installation base path", default=str(Path.home() / f".{self.APP_NAME}"))
         p.add_argument("--mode", choices=["user", "system"], default="user")
 
         # Status
-        p = sub.add_parser("status")
+        p = sub.add_parser(Installer.STATUS_ARG)
         p.add_argument("--base", help="Installation base path", default=str(Path.home() / f".{self.APP_NAME}"))
         p.add_argument("--json", action="store_true", help="JSON output")
         p.add_argument("--mode", choices=["user", "system"], default="user")
 
         # Switch
-        p = sub.add_parser("switch")
+        p = sub.add_parser(Installer.SWITCH_ARG)
         p.add_argument("version", nargs="?", help="Version to activate")
         p.add_argument("--latest", action="store_true", help="Switch to highest installed version")
         p.add_argument("--base", default=str(Path.home() / f".{self.APP_NAME}"))
