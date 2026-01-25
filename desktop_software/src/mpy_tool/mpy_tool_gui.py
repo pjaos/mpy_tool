@@ -64,6 +64,7 @@ class GUIServer(TabbedNiceGui):
     FILENAME1 = "FILENAME1"
     COPY_TO_EDITOR = "COPY_TO_EDITOR"
     RUN_MAIN_SW_STATE = "RUN_MAIN_SW_STATE"
+    NEW_PROJECT_PATH = "NEW_PROJECT_PATH"
 
     DEFAULT_CONFIG = {WIFI_SSID: "",
                       WIFI_PASSWORD: "",
@@ -83,7 +84,8 @@ class GUIServer(TabbedNiceGui):
                       DEFAULT_CODE_PATH: os.path.expanduser("~"),
                       FILENAME1: "main.py",
                       COPY_TO_EDITOR: True,
-                      RUN_MAIN_SW_STATE: True}
+                      RUN_MAIN_SW_STATE: True,
+                      NEW_PROJECT_PATH: ""}
 
     DESCRIP_STYLE_1 = '<span style="font-size:1.5em;">'
     SERIAL_PORT_OPEN = 'SERIAL_PORT_OPEN'
@@ -1343,9 +1345,30 @@ class GUIServer(TabbedNiceGui):
 
         with ui.row():
             self._new_project_path_input = ui.input(label='New project path').style('width: 800px;')
+            self._new_project_path_input.value = self._cfgMgr.getAttr(GUIServerEXT1.NEW_PROJECT_PATH)
+            self._select_example_project_dir_button = ui.button('Select folder', on_click=self._select_example_project_dir).tooltip("Select the folder to copy the example project into.")
+            self._appendButtonList(self._select_example_project_dir_button)
 
         with ui.row():
             self._copy_example_button = ui.button('Copy Example Project', on_click=self._copy_example_project).tooltip('Copy MCU example code to a new folder to start your new project.')
+
+    async def _select_example_project_dir(self):
+        """@brief Select the folder to copy the project template example intoMCU main.py micropython file."""
+        selected_path = self._new_project_path_input.value
+        if not selected_path:
+            selected_path = os.getcwd()
+        file_and_folder_chooser = FileAndFolderChooser(selected_path)
+        result = await file_and_folder_chooser.open()
+        if result:
+            selected_folder = result[0]
+            if os.path.isdir(selected_folder):
+                default_filename = f'project_template_{self._example_select.value}'
+                self._new_project_path_input.value = os.path.join(selected_folder, default_filename)
+                self._saveConfig()
+                ui.notify(f"{default_filename} is the default project folder name. You may change this in 'New project path' field if required.", type='positive', position='top')
+
+            else:
+                self.error(f"{selected_folder} selected. You must select a folder.")
 
     def _open_project_examples_page(self):
         """@brief open the top level mcu code examples page in a separate browser window."""
@@ -1689,6 +1712,7 @@ class GUIServerEXT1(GUIServer):
         self._scanPortSelect = None
         self._scanSecondsInput = None
         self._scanIPAddressInput = None
+        self._new_project_path_input = None
         self._cfgMgr = ConfigManager(self._uio, GUIServerEXT1.CFG_FILENAME, GUIServerEXT1.DEFAULT_CONFIG)
         self._loadConfig()
         self._saveConfig()
@@ -1717,6 +1741,8 @@ class GUIServerEXT1(GUIServer):
             self._cfgMgr.addAttr(GUIServerEXT1.SCAN_SECONDS, self._scanSecondsInput.value)
         if self._scanIPAddressInput:
             self._cfgMgr.addAttr(GUIServerEXT1.SCAN_IP_ADDRESS, self._scanIPAddressInput.value)
+        if self._new_project_path_input:
+            self._cfgMgr.addAttr(GUIServerEXT1.NEW_PROJECT_PATH, self._new_project_path_input.value)
 
         self._cfgMgr.store()
 
