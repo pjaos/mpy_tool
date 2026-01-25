@@ -7,5 +7,14 @@
     <h1>Sensor Data</h1>
     <p>Temperature: {{ temperature }} &deg;C</p>
     <p>Humidity: {{ humidity }} %</p>
+
+    <form action="/set" method="post">
+        <label>
+            Target temperature:
+            <input type="number" name="target_temp" step="0.1">
+        </label>
+        <button type="submit">Submit</button>
+    </form>
+
 </body>
 </html>
