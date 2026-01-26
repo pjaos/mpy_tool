@@ -371,8 +371,9 @@ class WiFi(object):
                 elif cmd == WiFi.DISABLE_BT:
                     # This occurs after the WiFi has been configured. The config file contains the WiFi
                     # config and so the subsequent startup process will no longer enable bluetooth.
-                    Hardware.Reboot(uo=self._uo)
+                    Hardware.reboot()
                     while True:
+                        print("PJA WAiting for reboot...")
                         sleep(1)
 
     def set_factory_defaults_method(self, factory_defaults_method):
