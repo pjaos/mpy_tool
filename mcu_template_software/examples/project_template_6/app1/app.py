@@ -7,6 +7,9 @@ from lib.uo import UO
 from lib.config import MachineConfig
 from lib.ydev import YDev
 from lib.base_machine import BaseMachine
+from lib.webserver import WebServer
+from lib.microdot.microdot import send_file, Response
+from lib.io import IO
 
 SHOW_MESSAGES_ON_STDOUT = True  # Turning this off will stop messages being sent on the serial port and will reduce CPU usage.
 WDT_TIMEOUT_MSECS = 8300        # Note that 8388 is the max WD timeout value on pico W hardware.
@@ -62,6 +65,121 @@ async def start(runningAppKey, configFilename):
     this_machine.start()
 
 
+class MyWebServer(WebServer):
+    """@brief The webserver for this project."""
+
+    def __init__(self,
+                 machine_config,
+                 startTime,
+                 uo=None,
+                 port=WebServer.DEFAULT_PORT):
+        super().__init__(machine_config,
+                         startTime,
+                         uo=uo,
+                         port=port)
+
+        self._dark_mode = True
+
+        # --- Parameters stored on the MCU ---
+        self._params = { "charge_current": 500, # mA
+                       }
+        self._battery_voltage = 36
+        self._charging = True
+
+        # Used for plotting data in the web browser.
+        self._reading_history = []  # list of (voltage, current)
+        self._max_points = 50
+
+        self._load_routes()
+
+    def add_reading(self, volts, amps):
+        self._reading_history.append((volts, amps))
+        if len(self._reading_history) > self._max_points:
+            self._reading_history.pop(0)
+
+        print(f"PJA: len(self._reading_history)={len(self._reading_history)}")
+
+    # --- Simulated battery logic ---
+    def _read_battery_voltage(self):
+        if self._charging:
+            battery_voltage = min(4.2, self._battery_voltage + 0.01)
+        else:
+            battery_voltage = max(3.0, self._battery_voltage - 0.005)
+        return battery_voltage
+
+    def _load_routes(self):
+
+        @self._app.route('assets/<path>')
+        def static_files(request, path):
+            # The file should be found inside the assets folder of the running app
+            running_app = self._machine_config.get(MachineConfig.RUNNING_APP_KEY)
+            file_to_send = f"/app{running_app}" + '/assets/' + path
+            file_exists = IO.FileExists(file_to_send)
+            if file_exists:
+                return send_file(file_to_send)
+
+        @self._app.route('/status')
+        def status(request):
+            v = self._read_battery_voltage()
+            html = f"""
+                <p>Voltage: {v:.2f} V</p>
+                <p>Charging: {"Yes" if self._charging else "No"}</p>
+            """
+            return html
+
+        @self._app.route('/toggle', methods=['POST'])
+        def toggle(request):
+            charging = not self._charging
+            v = self._read_battery_voltage()
+            html = f"""
+                <p>Voltage: {v:.2f} V</p>
+                <p>Charging: {"Yes" if charging else "No"}</p>
+            """
+            return html
+
+        # --- GET parameters ---
+        @self._app.route('/get_param')
+        def get_param(request):
+            html = f"""
+                <p>Charge Current: {self._params['charge_current']} mA</p>
+            """
+            return html
+
+        # --- SET parameters ---
+        @self._app.route('/set_param', methods=['POST'])
+        def set_param(request):
+            if 'charge_current' in request.form:
+                try:
+                    self._params['charge_current'] = int(request.form['charge_current'])
+                except:
+                    return "<p>Error: invalid number</p>"
+
+            html = f"""
+                <p>Updated Charge Current: {self._params['charge_current']} mA</p>
+            """
+            return html
+
+        @self._app.post('/toggle-dark')
+        def toggle_dark(request):
+            self._dark_mode = not self._dark_mode
+            print(f"PJA: self._dark_mode={self._dark_mode}")
+            return Response('', 204)  # no content
+
+        @self._app.route('/plot_data')
+        def plot_data(request):
+            # Ensure you are recording samples somewhere
+            data = {
+                "labels": list(range(len(self._reading_history))),
+                "voltage": [v for v, c in self._reading_history],
+                "current": [c for v, c in self._reading_history]
+            }
+            return data
+
+
+
+
+
+
 class ThisMachine(BaseMachine):
     """@brief Implement functionality required by this project."""
 
@@ -75,25 +193,6 @@ class ThisMachine(BaseMachine):
         # The WDT will then trigger a reboot.
         # self._wdt = WDT(timeout=WDT_TIMEOUT_MSECS)
 
-    async def _updateTemp(self, paramDict):
-        """@brief Example code to update the temperature and humidity.
-                  In reality you are likely to read values from sensor/s. """
-        from math import floor
-        from random import random
-        #This task runs while the webserver is running.
-        while True:
-            # Move temp and humidity by small amounts so user can see
-            # values changing
-            temp = paramDict['temperature']
-            value = floor(float(temp)) + random()
-            paramDict['temperature'] = f"{value:.3f}"
-
-            humidity = paramDict['humidity']
-            value = floor(float(humidity)) + random()
-            paramDict['humidity'] = f"{value:.3f}"
-
-            await asyncio.sleep(1)
-
     def start(self):
         self.show_ram_info()
 
@@ -104,31 +203,36 @@ class ThisMachine(BaseMachine):
         # Start task that looks for user press of the reset to defaults button press
         asyncio.create_task(self._check_factory_Defaults_task())
 
-        # Call the app task to execute your projects functionality.
-        asyncio.create_task(self.app_task())
-
         # Task that will return JSON messages to the YDev server.
         ydev = YDev(self._machine_config)
         asyncio.create_task(ydev.listen())
 
+
         # Run the web server. This is used for upgrades and also to present
         # a local webserver to allow users to interact with the device.
         # In this case it displays dummy temperatures.
-        from lib.webserver import WebServer
-        web_server = WebServer(self._machine_config,
-                               self._startTime,
-                               uo=self._uo)
-        paramDict = {'temperature': 24.5, 'humidity': 60}
-        asyncio.create_task(self._updateTemp(paramDict))
+        self._web_server = MyWebServer(self._machine_config,
+                                self._startTime,
+                                uo=self._uo)
 
-        web_server.setParamDict(paramDict)
-        web_server.run()
+        # Call the app task to execute your projects functionality.
+        asyncio.create_task(self.app_task())
+
+        self._web_server.run()
+
+    async def read(self):
+        import random
+        volts = random.random()*12
+        amps = random.random()
+        return (volts, amps)
 
     async def app_task(self):
         """@brief Add your project code here.
                   Make sure await asyncio.sleep(1) is called frequently to ensure other tasks get CPU time."""
         count = 0
         while True:
+            volts, amps = await self.read()
+            self._web_server.add_reading(volts, amps)
             print(f"app_task(): count = {count}")
             await asyncio.sleep(1)
             count += 1

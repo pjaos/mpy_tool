@@ -373,7 +373,8 @@ class WiFi(object):
                     # config and so the subsequent startup process will no longer enable bluetooth.
                     Hardware.reboot()
                     while True:
-                        print("PJA WAiting for reboot...")
+                        if self._uo:
+                            self._uo.debug("Waiting for reboot...")
                         sleep(1)
 
     def set_factory_defaults_method(self, factory_defaults_method):

@@ -1,6 +1,6 @@
 import sys
 import os
-from time import sleep
+
 from machine import Timer, reset_cause, deepsleep, reset
 try:
     from micropython import const
@@ -59,14 +59,15 @@ class Hardware(object):
         """@brief Reboot this device."""
         # Ensure the file system is synced before we reboot.
         os.sync()
-        # This won't work as Timer but the ESP32C6 MicroPython failed to work because at
-        # this time ESP32C6 MicroPython Timer support is yet to be added.
+        # Issue
+        # The following won't work on ESP32C6 as Timer support is yet to be added on
+        # image provided by the mpy_tool_gui install tab.
         timer = Hardware.get_timer()
-        timer.init(mode=Timer.ONE_SHOT, period=1, callback=Hardware._do_reboot )
+        # Reboot in 500 ms
+        timer.init(mode=Timer.ONE_SHOT, period=500, callback=Hardware._do_reboot )
 
     def _do_reboot(_):
         """@brief Perform a device restart. The argument is the timer instance that called this method."""
-        sleep(0.25)
         print("Rebooting MCU...")
         # !!! This does not always work
         reset()

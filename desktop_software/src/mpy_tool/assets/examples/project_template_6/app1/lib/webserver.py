@@ -61,6 +61,8 @@ class WebServer():
         self._startTime = startTime
         self._paramDict = None
 
+        self._target_temp = 1.0
+
     def setParamDict(self, paramDict):
         """@brief Set the dictionary holding parameters that are used to replace text in html files as they are loaded.
            @param paramDict A dictionary that holds the following.
@@ -527,12 +529,23 @@ class WebServer():
             request.app.shutdown()
             return get_json(WebServer.GetErrorDict("The server is shutting down..."))
 
+        @app.post('/set')
+        def set_params(request):
+            """This sends data from the web page to the code."""
+
+            # Read form data
+            target_temp = float(request.form.get('target_temp', self._target_temp))
+
+            return f"Target temperature set to {target_temp} °C"
+
         # The ability to seth the WebREPL password over the REST interface is a clear security hole.
         # This is why this is commented out by default. Remove the comment lines with care.
 #        @app.route('/setwebreplpw')
 #        async def set_webrepl_password(request):
 #            return get_json(self._set_webrepl_password(request))
 
+        # The default path. Do not place route definitions after this or they will
+        # not be called.
         @app.route('/')
         @app.route('/<path:path>')
         def serve(request, path='index.html'):

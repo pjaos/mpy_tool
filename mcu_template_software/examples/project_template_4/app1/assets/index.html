@@ -1,11 +1,201 @@
 <!DOCTYPE html>
-<html>
+<html class="dark">
 <head>
-    <title>Sensor Dashboard</title>
+    <meta charset="UTF-8">
+    <title>Battery Charger Control</title>
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="assets/htmx.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .card { padding: 15px; border: 1px solid #ccc; border-radius: 8px; width: 750px; }
+        input { width: 80px; }
+        button { margin-top: 10px; }
+    </style>
 </head>
 <body>
-    <h1>Sensor Data</h1>
-    <p>Temperature: {{ temperature }} &deg;C</p>
-    <p>Humidity: {{ humidity }} %</p>
+
+<h2>Battery Charger</h2>
+
+<div class="tabs">
+    <button class="tab-button active" data-tab="status-tab">Status</button>
+    <button class="tab-button" data-tab="params-tab">Parameters</button>
+    <button class="tab-button" data-tab="plot-tab">Plot</button>
+</div>
+
+<div id="status-tab" class="tab-content active">
+    <div class="card">
+        <h3>Status</h3>
+
+        <div
+            id="status"
+            hx-get="/status"
+            hx-trigger="load, every 2s"
+            hx-target="#status"
+            hx-swap="innerHTML">
+            Loading...
+        </div>
+
+        <button
+            hx-post="/toggle"
+            hx-target="#status"
+            hx-swap="innerHTML">
+            Toggle Charging
+        </button>
+    </div>
+</div>
+
+<br>
+
+<div id="params-tab" class="tab-content">
+    <div class="card">
+        <h3>Parameters</h3>
+
+        <!-- Form to SET a parameter -->
+        <form hx-post="/set_param" hx-target="#param_result" hx-swap="innerHTML">
+            <label>Charge Current (mA):</label>
+            <input type="number" name="charge_current" value="500">
+            <button type="submit">Set</button>
+        </form>
+
+        <br>
+
+        <!-- Button to GET parameters -->
+        <button
+            hx-get="/get_param"
+            hx-target="#param_result"
+            hx-swap="innerHTML">
+            Get Parameters
+        </button>
+
+        <div id="param_result">No data yet</div>
+    </div>
+</div>
+
+<div id="plot-tab" class="tab-content">
+    <div class="card">
+        <h3>Voltage & Current</h3>
+
+        <div id="plotly-chart" style="width:100%; height:300px;"></div>
+
+        <!-- htmx polling for data -->
+        <div
+            id="plot-data"
+            hx-get="/plot_data"
+            hx-trigger="load, every 2s"
+            hx-target="#plot-data"
+            hx-swap="innerHTML"
+            style="display:none">
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <button hx-post="/toggle-dark" hx-swap="none">Toggle Dark Mode</button>
+
+    <script>
+        document.body.addEventListener("htmx:afterRequest", evt => {
+            if (evt.detail.requestConfig.path === "/toggle-dark") {
+                document.documentElement.classList.toggle("dark")
+            }
+        })
+    </script>
+</div>
+
+<script>
+let chartInitialised = false;
+let chart;
+
+document.body.addEventListener("htmx:afterSwap", evt => {
+    if (evt.detail.target.id === "plot-data") {
+        const data = JSON.parse(evt.detail.target.textContent);
+
+        if (!chartInitialised) {
+
+            chart = Plotly.newPlot('plotly-chart', [
+                {
+                    x: data.labels,
+                    y: data.voltage,
+                    mode: 'lines',
+                    name: 'Voltage (V)',
+                    line: { color: 'cyan', width: 2 },
+                    yaxis: 'y1'
+                },
+                {
+                    x: data.labels,
+                    y: data.current,
+                    mode: 'lines',
+                    name: 'Current (mA)',
+                    line: { color: 'orange', width: 2 },
+                    yaxis: 'y2'
+                }
+            ], {
+                showlegend: false,
+                paper_bgcolor: '#222',
+                plot_bgcolor: '#222',
+                font: { color: '#eee' },
+
+                margin: { t: 30, r: 60, b: 50, l: 60 },
+
+                xaxis: {
+                    title: 'Sample Number',
+                    gridcolor: '#333',
+                    zerolinecolor: '#555',
+                },
+
+                yaxis: {
+                    title: 'Voltage (V)',
+                    titlefont: { color: 'cyan' },
+                    tickfont: { color: 'cyan' },
+                    gridcolor: '#333',
+                    zerolinecolor: '#555',
+                    autorange: true,
+                    automargin: true,
+                },
+
+                yaxis2: {
+                    title: 'Current (mA)',
+                    titlefont: { color: 'orange' },
+                    tickfont: { color: 'orange' },
+                    overlaying: 'y',
+                    side: 'right',
+                    autorange: true,
+                    automargin: true,
+                }
+            });
+
+            chartInitialised = true;
+        } else {
+            updateData = {
+                x: [data.labels, data.labels],
+                y: [data.voltage, data.current]
+            }
+            Plotly.update('plotly-chart', updateData, {}, {
+                transition: {
+                    duration: 150,
+                    easing: 'linear'
+                }
+            });
+        }
+    }
+});
+
+document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        // deactivate all buttons
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+        // show selected tab
+        const tabId = btn.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+    });
+});
+
+</script>
+
 </body>
 </html>

@@ -1,7 +1,10 @@
+import sys
 import os
 import gc
 import hashlib
 import binascii
+import asyncio
+
 import ujson as json
 from time import time
 
@@ -58,6 +61,8 @@ class WebServer():
         self._port = port
         self._startTime = startTime
         self._param_dict = {}
+        # PJA
+        self.request_lock = asyncio.Lock()
 
         self._app = Microdot()
 
@@ -436,6 +441,37 @@ class WebServer():
 
             return get_json(WebServer.get_ok_dict())
 
+        # ------- Start of protection from overload
+        # We lock requests so we process them serially
+        @self._app.before_request
+        async def acquire_lock(request):
+            try:
+                await asyncio.wait_for(self.request_lock.acquire(), 2)
+                request._has_lock = True
+            except asyncio.TimeoutError:
+                return Response('Server busy', status_code=503)
+
+        @self._app.after_request
+        async def release_lock(request, response):
+            if getattr(request, '_has_lock', False):
+                self.request_lock.release()
+                request._has_lock = False
+            return response
+
+        @self._app.errorhandler(Exception)
+        async def handle_exception(exc):
+            # release lock if held
+            if self.request_lock.locked():
+                self.request_lock.release()
+
+            sys.print_exception(exc)
+
+            return 'Internal error', 500
+
+            return Response('Internal error', status_code=500)
+
+        # --------End of protection from overload
+
         @self._app.route('/get_sys_stats')
         async def get_sys_stats(request):
             return get_json(self._getSysStats(request))
@@ -539,3 +575,4 @@ class WebServer():
                 return '404 Not Found', 404
 
         self._app.run(debug=True, port=self._port)
+
