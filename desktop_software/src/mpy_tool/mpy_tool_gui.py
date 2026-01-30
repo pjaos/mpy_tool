@@ -22,7 +22,7 @@ from mpy_tool._lib.bluetooth import YDevBlueTooth
 from p3lib.uio import UIO
 from p3lib.helper import logTraceBack
 from p3lib.pconfig import ConfigManager
-from p3lib.helper import get_assets_dir
+from p3lib.helper import get_assets_dir, EnvArgs
 
 from p3lib.ngt3 import TabbedNiceGui, YesNoDialog, FileAndFolderChooser, FileSaveChooser
 from nicegui import ui, app
@@ -140,6 +140,7 @@ class GUIServer(TabbedNiceGui):
         self._ser = None
         self._wifi_ssid = ""
         self._wifi_password = ""
+        self._mu = None
         self._serialRXQueueLock = threading.Lock()
         self._filePath = os.path.expanduser("~")
         self._loadConfig()
@@ -178,12 +179,12 @@ class GUIServer(TabbedNiceGui):
             '/memory_usage': self._init_mem_usage_gui,
             '/project_examples': self.project_examples,
             '/project_template_1_README.md': self.example_1_page,
-            '/project_template_2_README.md': self.example_1_page,
-            '/project_template_3_README.md': self.example_1_page,
-            '/project_template_4_README.md': self.example_1_page,
-            '/project_template_5_README.md': self.example_1_page,
-            '/project_template_6_README.md': self.example_1_page,
-            '/project_template_7_README.md': self.example_1_page,
+            '/project_template_2_README.md': self.example_2_page,
+            '/project_template_3_README.md': self.example_3_page,
+            '/project_template_4_README.md': self.example_4_page,
+            '/project_template_5_README.md': self.example_5_page,
+            '/project_template_6_README.md': self.example_6_page,
+            '/project_template_7_README.md': self.example_7_page,
             '/WIFI_SETUP_GPIOS.md': self.wifi_setup_gpios_page,
             })
 
@@ -1289,11 +1290,18 @@ class GUIServer(TabbedNiceGui):
         self._saveConfig()
 
     def _init_mem_usage_gui(self):
+        arg_list = MemoryUsageEnvArgs().get()
+        ip_address = arg_list[0]
+        run_gc = arg_list[1]
+        poll_seconds = arg_list[2]
+        debug = arg_list[3]
         self._mu = MemoryUsage(self._options,
-                            self._deviceIPAddressInput2.value,
-                            self._runGCInput.value,
-                            self._memMonSecondsInput.value,
-                            self._uio.isDebugEnabled())
+                               ip_address,
+                               run_gc,
+                               poll_seconds,
+                               debug)
+        self._mu.init_gui()
+        self._mu.start()
 
     def _startMemMon(self):
         """@brief Start monitoring MCU device memory usage."""
@@ -1302,7 +1310,13 @@ class GUIServer(TabbedNiceGui):
             self._memMonSecondsInput.value = 1
 
         self.info("Started memory monitor.")
-        self._mu.start()
+        # Pass args to GUIServer instance through the env
+        arg_list = []
+        arg_list.append(self._deviceIPAddressInput2.value)
+        arg_list.append(self._runGCInput.value)
+        arg_list.append(self._memMonSecondsInput.value)
+        arg_list.append(self._uio.isDebugEnabled())
+        MemoryUsageEnvArgs().set(arg_list)
         # This will open the new page in a new browser window
         ui.run_javascript("window.open('/memory_usage', '_blank')")
 
@@ -1690,6 +1704,9 @@ class MemoryUsage(TabbedNiceGui):
             self._upTimePlot.figure = self._createUpTimePlot()
             self._upTimePlot.update()  # Ensure the display is refreshed
 
+
+class MemoryUsageEnvArgs(EnvArgs):
+    ENV_REF = MemoryUsage.__name__
 
 class GUIServerEXT1(GUIServer):
     """@brief Add WiFi configuration to the GUIServer.
