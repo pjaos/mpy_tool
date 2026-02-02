@@ -122,9 +122,7 @@ class BaseMachine(UOBase):
         self._machine_config.set_defaults()
         self._machine_config.store()
         self.warn("Resetting to factory defaults.")
-        # Ensure the file system is synced before we reboot.
-        os.sync()
-        Hardware.Reboot(uo=self._uo)
+        Hardware.reboot()
         while True:
             sleep(1)
 

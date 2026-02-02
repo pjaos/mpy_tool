@@ -24,7 +24,7 @@ class BlueTooth():
             # blinking when no BLE device is connected
             # stable ON when connected
             self._led = Pin(led_gpio, Pin.OUT)
-            self._timer1 = Hardware.GetTimer()
+            self._timer1 = Hardware.get_timer()
         self._ble_connected = False
         self._rx_message = None
         self._debug = debug

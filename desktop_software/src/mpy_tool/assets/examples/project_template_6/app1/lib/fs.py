@@ -5,7 +5,7 @@ import uos
 class VFS():
 
     @staticmethod
-    def GetFSInfo():
+    def get_fs_info():
         """@brief Get the used and available disk space.
            @return A tuple containing
                    0 = The total disk space in bytes.
@@ -28,14 +28,14 @@ class VFS():
 
             return (total_bytes, used_space, percentage_used)
 
-        raise Exception("GetFSInfo(): {} is invalid.".format(stats))
+        raise Exception("get_fs_info(): {} is invalid.".format(stats))
 
     @staticmethod
-    def ShowFSInfo(uo):
+    def show_fs_info(uo):
         """@brief Show the file system info.
            @param A UO instance or None"""
         if uo:
-            total_bytes, used_space, percentage_used = VFS.GetFSInfo()
+            total_bytes, used_space, percentage_used = VFS.get_fs_info()
             uo.info("File system information.")
             uo.info("Total Space (MB): {:.2f}".format(total_bytes / 1E6))
             uo.info("Used Space (MB):  {:.2f}".format(used_space / 1E6))
