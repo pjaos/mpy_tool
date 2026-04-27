@@ -1179,7 +1179,11 @@ class USBLoader(LoaderBase):
                     break
 
         if esp_type is None:
-            raise Exception("Failed to determine ESP32 type.")
+            esp_type = self._mcu
+            # Some older code on esp32 devices does not respond to the chip-id esptool cmd
+            # in this case we assume the expected/configured MCU is connected rather than
+            # generating an error which halts any code loading process as previously.
+            # raise Exception("Failed to determine ESP32 type.")
 
         # Check the correct type of MCU is connected.
         self._checkMCUCorrect(line, checkIDLine=True)
