@@ -1,0 +1,37 @@
+/* light mode defaults */
+
+html.dark {
+    background-color: #111;
+    color: #eee;
+}
+
+html.dark a {
+    color: #9cf;
+}
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.tab-button {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: #444;
+    color: #eee;
+    cursor: pointer;
+}
+
+.tab-button.active {
+    background: #666;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}

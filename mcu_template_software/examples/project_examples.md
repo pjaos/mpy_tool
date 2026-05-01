@@ -31,3 +31,8 @@ The example code can be found in mcu_template_software/examples folder of the gi
 
   This has less functionality than the previous example. It allows the user to setup the WiFi using USB or bluetooth connections. Once connected to the WiFi
 the WebREPL interface is available. Click [here](project_template_7_README.md) for more info.
+
+- Example 8
+
+  This is as per example 6 but with NTP synchronisation of the MCU local time (RTC) using the NTP protocol. This local time is synchronised to UTC time.
+  Click [here](project_template_8_README.md) for more info.

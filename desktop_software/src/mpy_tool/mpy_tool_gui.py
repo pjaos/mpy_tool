@@ -98,7 +98,8 @@ class GUIServer(TabbedNiceGui):
                     '4',
                     '5',
                     '6',
-                    '7']
+                    '7',
+                    '8']
 
     @staticmethod
     def GetCmdOpts():
@@ -185,6 +186,7 @@ class GUIServer(TabbedNiceGui):
             '/project_template_5_README.md': self.example_5_page,
             '/project_template_6_README.md': self.example_6_page,
             '/project_template_7_README.md': self.example_7_page,
+            '/project_template_8_README.md': self.example_8_page,
             '/WIFI_SETUP_GPIOS.md': self.wifi_setup_gpios_page,
             })
 
@@ -1494,6 +1496,11 @@ class GUIServer(TabbedNiceGui):
     def example_7_page(self):
         example = GUIServer.GetExample(filename = 'project_template_7_README.md')
         ui.page_title('MPY Tool Example 7 doc')
+        ui.markdown(Path(example).read_text())
+
+    def example_8_page(self):
+        example = GUIServer.GetExample(filename = 'project_template_8_README.md')
+        ui.page_title('MPY Tool Example 8 doc')
         ui.markdown(Path(example).read_text())
 
     # This page is referenced inside examples 4 and 5

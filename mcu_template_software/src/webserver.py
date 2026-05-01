@@ -374,6 +374,12 @@ class WebServer():
                 else:
                     raise
 
+    def set_start_time(self, start_time):
+        """@brief Update the MCU start time.
+           @param start_time The RTC time when the MCU unit was started. This is called
+                             after a successful NTP time sync to ensure the uptime is valid."""
+        self._startTime = start_time
+
     def _set_webrepl_password(self, request):
         """@brief Create a dir on the devices file system.
            @param request The http request.
